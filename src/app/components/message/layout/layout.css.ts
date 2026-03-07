@@ -86,6 +86,9 @@ export const MessageBase = recipe({
       marginTop: SpacingVar,
       padding: `${config.space.S100} ${config.space.S200} ${config.space.S100} ${config.space.S400}`,
       borderRadius: `0 ${config.radii.R400} ${config.radii.R400} 0`,
+      ':hover': {
+        backgroundColor: color.Surface.ContainerHover,
+      },
     },
   ],
   variants: {
