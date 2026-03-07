@@ -52,12 +52,7 @@ import {
   getMemberAvatarMxc,
   getMemberDisplayName,
 } from '../../../utils/room';
-import {
-  getCanonicalAliasOrRoomId,
-  getMxIdLocalPart,
-  isRoomAlias,
-  mxcUrlToHttp,
-} from '../../../utils/matrix';
+import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
@@ -324,8 +319,6 @@ export const MessageCopyLinkItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
-
   const handleCopy = () => {
     const eventId = mEvent.getId();
     if (!eventId) return;
@@ -816,8 +809,7 @@ export const Message = as<'div', MessageProps>(
     );
 
     const msgContentJSX = (
-      <Box direction="Column" alignSelf="Start" style={{ width: '100%' }}>
-        {reply}
+      <Box direction="Column" alignSelf="Start" style={{ maxWidth: '100%' }}>
         {edit && onEditId ? (
           <MessageEditor
             style={{
@@ -1130,17 +1122,22 @@ export const Message = as<'div', MessageProps>(
           </div>
         )}
         {messageLayout === MessageLayout.Compact && (
-          <CompactLayout before={headerJSX} onContextMenu={handleContextMenu}>
+          <CompactLayout before={headerJSX} context={reply} onContextMenu={handleContextMenu}>
             {msgContentJSX}
           </CompactLayout>
         )}
         {messageLayout === MessageLayout.Bubble && (
-          <BubbleLayout before={avatarJSX} header={headerJSX} onContextMenu={handleContextMenu}>
+          <BubbleLayout
+            before={avatarJSX}
+            header={headerJSX}
+            context={reply}
+            onContextMenu={handleContextMenu}
+          >
             {msgContentJSX}
           </BubbleLayout>
         )}
         {messageLayout !== MessageLayout.Compact && messageLayout !== MessageLayout.Bubble && (
-          <ModernLayout before={avatarJSX} onContextMenu={handleContextMenu}>
+          <ModernLayout before={avatarJSX} context={reply} onContextMenu={handleContextMenu}>
             {headerJSX}
             {msgContentJSX}
           </ModernLayout>
