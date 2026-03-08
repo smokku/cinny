@@ -1,13 +1,5 @@
-import React, {
-  FormEventHandler,
-  MouseEventHandler,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { ClientEvent, MatrixEvent, JoinRule } from 'matrix-js-sdk';
+import React, { FormEventHandler, MouseEventHandler, useMemo, useRef, useState } from 'react';
+import { JoinRule } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -45,11 +37,9 @@ import {
   useBookmarkList,
   useBookmarkLoading,
   useBookmarkActions,
+  useBookmarkRefreshError,
 } from '../../../features/bookmarks/useBookmarks';
-import {
-  BookmarkItemContent,
-  BOOKMARKS_INDEX_EVENT,
-} from '../../../features/bookmarks/bookmarkDomain';
+import { BookmarkItemContent } from '../../../features/bookmarks/bookmarkDomain';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -73,6 +63,7 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import colorMXID from '../../../../util/colorMXID';
 import { stopPropagation } from '../../../utils/keyboard';
 import { highlightText, makeHighlightRegex } from '../../../plugins/react-custom-html-parser';
+import { ContainerColor } from '../../../styles/ContainerColor.css';
 
 type RemoveBookmarkDialogProps = {
   open: boolean;
@@ -468,9 +459,9 @@ function BookmarkFilterInput({
 }
 
 export function BookmarksList() {
-  const mx = useMatrixClient();
   const bookmarks = useBookmarkList();
   const loading = useBookmarkLoading();
+  const refreshError = useBookmarkRefreshError();
   const { refresh, remove } = useBookmarkActions();
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
@@ -482,23 +473,6 @@ export function BookmarksList() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [filterTerm, setFilterTerm] = useState<string | undefined>();
-
-  const handleAccountData = useCallback(
-    (event: MatrixEvent) => {
-      if (event.getType() === BOOKMARKS_INDEX_EVENT) {
-        refresh();
-      }
-    },
-    [refresh]
-  );
-
-  useEffect(() => {
-    refresh();
-    mx.on(ClientEvent.AccountData, handleAccountData);
-    return () => {
-      mx.removeListener(ClientEvent.AccountData, handleAccountData);
-    };
-  }, [mx, refresh, handleAccountData]);
 
   // Filter bookmarks by search term
   const filtered = useMemo(() => {
@@ -519,6 +493,22 @@ export function BookmarksList() {
 
   // Group filtered bookmarks by room
   const groups = useMemo(() => {
+    const byBookmarkedTsDesc = (a: BookmarkItemContent, b: BookmarkItemContent): number => {
+      if (a.bookmarked_ts !== b.bookmarked_ts) {
+        return b.bookmarked_ts - a.bookmarked_ts;
+      }
+      if (a.event_ts !== b.event_ts) {
+        return b.event_ts - a.event_ts;
+      }
+      if (a.bookmark_id < b.bookmark_id) {
+        return -1;
+      }
+      if (a.bookmark_id > b.bookmark_id) {
+        return 1;
+      }
+      return 0;
+    };
+
     const map = filtered.reduce((acc, item) => {
       const existing = acc.get(item.room_id);
       if (existing) {
@@ -528,7 +518,11 @@ export function BookmarksList() {
       }
       return acc;
     }, new Map<string, BookmarkItemContent[]>());
-    return Array.from(map.entries());
+
+    return Array.from(map.entries()).map<[string, BookmarkItemContent[]]>(([roomId, items]) => [
+      roomId,
+      [...items].sort(byBookmarkedTsDesc),
+    ]);
   }, [filtered]);
 
   const handleFilter = (term: string) => {
@@ -581,7 +575,24 @@ export function BookmarksList() {
                   />
                 </Box>
 
-                {!filterTerm && bookmarks.length === 0 && !loading && (
+                {refreshError && !loading && (
+                  <Box
+                    className={ContainerColor({ variant: 'Critical' })}
+                    style={{ padding: config.space.S300, borderRadius: config.radii.R400 }}
+                    direction="Column"
+                    gap="200"
+                  >
+                    <Text size="L400">Failed to refresh bookmarks.</Text>
+                    <Text size="T300">{refreshError.message}</Text>
+                    <Box>
+                      <Button variant="Critical" size="300" onClick={() => refresh()}>
+                        <Text size="B300">Retry</Text>
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
+
+                {!filterTerm && bookmarks.length === 0 && !loading && !refreshError && (
                   <PageHeroEmpty>
                     <PageHeroSection>
                       <PageHero
