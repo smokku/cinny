@@ -195,12 +195,14 @@ export function MImage({ content, renderImageContent, outlined }: MImageProps) {
   if (typeof mxcUrl !== 'string') {
     return <BrokenContent />;
   }
-  const height = scaleYDimension(imgInfo?.w || 400, 400, imgInfo?.h || 400);
+  const displayWidth = Math.min(imgInfo?.w || 400, 400);
+  const height = scaleYDimension(imgInfo?.w || 400, displayWidth, imgInfo?.h || 400);
 
   return (
-    <Attachment outlined={outlined}>
+    <Attachment outlined={outlined} style={{ width: toRem(displayWidth) }}>
       <AttachmentBox
         style={{
+          width: toRem(displayWidth),
           height: toRem(height < 48 ? 48 : height),
         }}
       >
@@ -245,12 +247,13 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: 
     return <BrokenContent />;
   }
 
-  const height = scaleYDimension(videoInfo.w || 400, 400, videoInfo.h || 400);
+  const displayWidth = Math.min(videoInfo.w || 400, 400);
+  const height = scaleYDimension(videoInfo.w || 400, displayWidth, videoInfo.h || 400);
 
   const filename = content.filename ?? content.body ?? 'Video';
 
   return (
-    <Attachment outlined={outlined}>
+    <Attachment outlined={outlined} style={{ width: toRem(displayWidth) }}>
       <AttachmentHeader>
         <FileHeader
           body={filename}
@@ -267,6 +270,7 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: 
       </AttachmentHeader>
       <AttachmentBox
         style={{
+          width: toRem(displayWidth),
           height: toRem(height < 48 ? 48 : height),
         }}
       >
@@ -310,7 +314,7 @@ export function MAudio({ content, renderAsFile, renderAudioContent, outlined }: 
 
   const filename = content.filename ?? content.body ?? 'Audio';
   return (
-    <Attachment outlined={outlined}>
+    <Attachment outlined={outlined} style={{ width: toRem(400) }}>
       <AttachmentHeader>
         <FileHeader
           body={filename}
@@ -360,7 +364,7 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
   }
 
   return (
-    <Attachment outlined={outlined}>
+    <Attachment outlined={outlined} style={{ width: toRem(400) }}>
       <AttachmentHeader>
         <FileHeader
           body={content.filename ?? content.body ?? 'Unnamed File'}
