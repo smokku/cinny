@@ -3,7 +3,9 @@ import { Capabilities, validateAuthMetadata, ValidatedAuthMetadata } from 'matri
 import { AsyncStatus, useAsyncCallbackValue } from '../hooks/useAsyncCallback';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { MediaConfig } from '../hooks/useMediaConfig';
+import { useSpecVersions } from '../hooks/useSpecVersions';
 import { promiseFulfilledResult } from '../utils/common';
+import { requestMediaConfig } from '../utils/mediaAuthentication';
 
 export type ServerConfigs = {
   capabilities?: Capabilities;
@@ -16,13 +18,14 @@ type ServerConfigsLoaderProps = {
 };
 export function ServerConfigsLoader({ children }: ServerConfigsLoaderProps) {
   const mx = useMatrixClient();
+  const specVersions = useSpecVersions();
   const fallbackConfigs = useMemo(() => ({}), []);
 
   const [configsState] = useAsyncCallbackValue<ServerConfigs, unknown>(
     useCallback(async () => {
       const result = await Promise.allSettled([
         mx.getCapabilities(),
-        mx.getMediaConfig(),
+        requestMediaConfig<MediaConfig>(mx, specVersions),
         mx.getAuthMetadata(),
       ]);
 
@@ -42,7 +45,7 @@ export function ServerConfigsLoader({ children }: ServerConfigsLoaderProps) {
         mediaConfig,
         authMetadata: validatedAuthMetadata,
       };
-    }, [mx])
+    }, [mx, specVersions])
   );
 
   const configs: ServerConfigs =
