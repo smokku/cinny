@@ -8,7 +8,12 @@ import {
   isBookmarked as repoIsBookmarked,
 } from './bookmarkRepository';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { bookmarkIdSetAtom, bookmarkListAtom, bookmarkLoadingAtom } from '../../state/bookmarks';
+import {
+  bookmarkIdSetAtom,
+  bookmarkListAtom,
+  bookmarkLoadingAtom,
+  bookmarkRefreshErrorAtom,
+} from '../../state/bookmarks';
 
 export function useBookmarkList(): BookmarkItemContent[] {
   return useAtomValue(bookmarkListAtom);
@@ -16,6 +21,10 @@ export function useBookmarkList(): BookmarkItemContent[] {
 
 export function useBookmarkLoading(): boolean {
   return useAtomValue(bookmarkLoadingAtom);
+}
+
+export function useBookmarkRefreshError(): Error | undefined {
+  return useAtomValue(bookmarkRefreshErrorAtom);
 }
 
 export function useIsBookmarked(roomId: string, eventId: string): boolean {
@@ -27,16 +36,20 @@ export function useBookmarkActions() {
   const mx = useMatrixClient();
   const setList = useSetAtom(bookmarkListAtom);
   const setLoading = useSetAtom(bookmarkLoadingAtom);
+  const setRefreshError = useSetAtom(bookmarkRefreshErrorAtom);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const items = listBookmarks(mx);
+      const items = await listBookmarks(mx);
       setList(items);
+      setRefreshError(undefined);
+    } catch (error) {
+      setRefreshError(error as Error);
     } finally {
       setLoading(false);
     }
-  }, [mx, setList, setLoading]);
+  }, [mx, setList, setLoading, setRefreshError]);
 
   const add = useCallback(
     async (item: BookmarkItemContent) => {
