@@ -74,6 +74,8 @@ import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
+import { computeBookmarkId, createBookmarkItem } from '../../bookmarks/bookmarkDomain';
+import { useIsBookmarked, useBookmarkActions } from '../../bookmarks/useBookmarks';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -377,6 +379,44 @@ export const MessagePinItem = as<
     >
       <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
         {isPinned ? 'Unpin Message' : 'Pin Message'}
+      </Text>
+    </MenuItem>
+  );
+});
+
+export const MessageBookmarkItem = as<
+  'button',
+  {
+    room: Room;
+    mEvent: MatrixEvent;
+    onClose?: () => void;
+  }
+>(({ room, mEvent, onClose, ...props }, ref) => {
+  const eventId = mEvent.getId() ?? '';
+  const bookmarked = useIsBookmarked(room.roomId, eventId);
+  const { add, remove } = useBookmarkActions();
+
+  const handleClick = async () => {
+    if (bookmarked) {
+      await remove(computeBookmarkId(room.roomId, eventId));
+    } else {
+      const item = createBookmarkItem(room, mEvent);
+      if (item) await add(item);
+    }
+    onClose?.();
+  };
+
+  return (
+    <MenuItem
+      size="300"
+      after={<Icon size="100" src={Icons.Bookmark} />}
+      radii="300"
+      onClick={handleClick}
+      {...props}
+      ref={ref}
+    >
+      <Text className={css.MessageMenuItemText} as="span" size="T300" truncate>
+        {bookmarked ? 'Remove Bookmark' : 'Bookmark Message'}
       </Text>
     </MenuItem>
   );
@@ -1077,6 +1117,7 @@ export const Message = as<'div', MessageProps>(
                             />
                           )}
                           <MessageCopyLinkItem room={room} mEvent={mEvent} onClose={closeMenu} />
+                          <MessageBookmarkItem room={room} mEvent={mEvent} onClose={closeMenu} />
                           {canPinEvent && (
                             <MessagePinItem room={room} mEvent={mEvent} onClose={closeMenu} />
                           )}
@@ -1251,6 +1292,9 @@ export const Event = as<'div', EventProps>(
                             />
                           )}
                           <MessageCopyLinkItem room={room} mEvent={mEvent} onClose={closeMenu} />
+                          {!stateEvent && (
+                            <MessageBookmarkItem room={room} mEvent={mEvent} onClose={closeMenu} />
+                          )}
                         </Box>
                         {((!mEvent.isRedacted() && canDelete && !stateEvent) ||
                           (mEvent.getSender() !== mx.getUserId() && !stateEvent)) && (

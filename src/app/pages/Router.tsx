@@ -19,6 +19,7 @@ import {
   REGISTER_PATH,
   RESET_PASSWORD_PATH,
   SPACE_PATH,
+  _BOOKMARKS_PATH,
   _CREATE_PATH,
   _FEATURED_PATH,
   _INVITES_PATH,
@@ -45,6 +46,7 @@ import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
 import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
 import { Notifications, Inbox, Invites } from './client/inbox';
+import { BookmarksList } from './client/bookmarks';
 import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
 import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
@@ -172,6 +174,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           <Route path={_CREATE_PATH} element={<HomeCreateRoom />} />
           <Route path={_JOIN_PATH} element={<p>join</p>} />
           <Route path={_SEARCH_PATH} element={<HomeSearch />} />
+          <Route path={_BOOKMARKS_PATH} element={<BookmarksList />} />
           <Route
             path={_ROOM_PATH}
             element={

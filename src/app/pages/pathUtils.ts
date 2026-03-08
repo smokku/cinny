@@ -6,6 +6,7 @@ import {
   EXPLORE_FEATURED_PATH,
   EXPLORE_PATH,
   EXPLORE_SERVER_PATH,
+  HOME_BOOKMARKS_PATH,
   HOME_CREATE_PATH,
   HOME_JOIN_PATH,
   HOME_PATH,
@@ -158,3 +159,5 @@ export const getCreatePath = (): string => CREATE_PATH;
 export const getInboxPath = (): string => INBOX_PATH;
 export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
 export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
+
+export const getHomeBookmarksPath = (): string => HOME_BOOKMARKS_PATH;
