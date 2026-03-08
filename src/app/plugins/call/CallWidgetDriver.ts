@@ -25,6 +25,7 @@ import {
 } from 'matrix-js-sdk';
 import { getCallCapabilities } from './utils';
 import { downloadMedia, mxcUrlToHttp } from '../../utils/matrix';
+import { requestMediaConfigFromServerVersions } from '../../utils/mediaAuthentication';
 
 export class CallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
@@ -294,7 +295,9 @@ export class CallWidgetDriver extends WidgetDriver {
   }
 
   public async getMediaConfig(): Promise<IGetMediaConfigResult> {
-    return this.mx.getMediaConfig();
+    const client = this.mx;
+
+    return requestMediaConfigFromServerVersions<IGetMediaConfigResult>(client);
   }
 
   public async uploadFile(file: XMLHttpRequestBodyInit): Promise<{ contentUri: string }> {
