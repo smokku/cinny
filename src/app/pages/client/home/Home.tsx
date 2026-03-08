@@ -34,12 +34,14 @@ import {
   getExplorePath,
   getHomeCreatePath,
   getHomeRoomPath,
+  getHomeBookmarksPath,
   getHomeSearchPath,
   withSearchParam,
 } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import {
+  useHomeBookmarksSelected,
   useHomeCreateSelected,
   useHomeSearchSelected,
 } from '../../../hooks/router/useHomeSelected';
@@ -206,6 +208,7 @@ export function Home() {
   const selectedRoomId = useSelectedRoom();
   const createRoomSelected = useHomeCreateSelected();
   const searchSelected = useHomeSearchSelected();
+  const bookmarksSelected = useHomeBookmarksSelected();
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
@@ -305,6 +308,22 @@ export function Home() {
                       <Box as="span" grow="Yes">
                         <Text as="span" size="Inherit" truncate>
                           Message Search
+                        </Text>
+                      </Box>
+                    </Box>
+                  </NavItemContent>
+                </NavLink>
+              </NavItem>
+              <NavItem variant="Background" radii="400" aria-selected={bookmarksSelected}>
+                <NavLink to={getHomeBookmarksPath()}>
+                  <NavItemContent>
+                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
+                      <Avatar size="200" radii="400">
+                        <Icon src={Icons.Bookmark} size="100" filled={bookmarksSelected} />
+                      </Avatar>
+                      <Box as="span" grow="Yes">
+                        <Text as="span" size="Inherit" truncate>
+                          Bookmarks
                         </Text>
                       </Box>
                     </Box>
