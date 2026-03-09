@@ -335,6 +335,10 @@ type SearchFiltersProps = {
   onGlobalChange: (global?: boolean) => void;
   order?: string;
   onOrderChange: (order?: string) => void;
+  sendersMe?: boolean;
+  onSendersMeChange: (enabled: boolean) => void;
+  mentionsMe?: boolean;
+  onMentionsMeChange: (enabled: boolean) => void;
 };
 export function SearchFilters({
   defaultRoomsFilterName,
@@ -346,6 +350,10 @@ export function SearchFilters({
   order,
   onGlobalChange,
   onOrderChange,
+  sendersMe,
+  onSendersMeChange,
+  mentionsMe,
+  onMentionsMeChange,
 }: SearchFiltersProps) {
   const mx = useMatrixClient();
 
@@ -373,6 +381,30 @@ export function SearchFilters({
             <Text size="T200">Global</Text>
           </Chip>
         )}
+        <Line
+          style={{ margin: `${config.space.S100} 0` }}
+          direction="Vertical"
+          variant="Surface"
+          size="300"
+        />
+        <Chip
+          variant={sendersMe ? 'Success' : 'Surface'}
+          aria-pressed={sendersMe}
+          before={sendersMe && <Icon size="100" src={Icons.Check} />}
+          outlined
+          onClick={() => onSendersMeChange(!sendersMe)}
+        >
+          <Text size="T200">From: me</Text>
+        </Chip>
+        <Chip
+          variant={mentionsMe ? 'Success' : 'Surface'}
+          aria-pressed={mentionsMe}
+          before={mentionsMe && <Icon size="100" src={Icons.Check} />}
+          outlined
+          onClick={() => onMentionsMeChange(!mentionsMe)}
+        >
+          <Text size="T200">Mentions: me</Text>
+        </Chip>
         <Line
           style={{ margin: `${config.space.S100} 0` }}
           direction="Vertical"

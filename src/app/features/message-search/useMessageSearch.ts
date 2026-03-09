@@ -20,6 +20,11 @@ export type ResultGroup = {
   items: ResultItem[];
 };
 
+export type MentionsFilter = {
+  user_ids: string[];
+  room?: boolean;
+};
+
 export type SearchResult = {
   nextToken?: string;
   highlights: string[];
@@ -68,21 +73,26 @@ export type MessageSearchParams = {
   order?: string;
   rooms?: string[];
   senders?: string[];
+  mentions?: MentionsFilter;
 };
+
+type SearchRequestBody = ISearchRequestBody & {
+  search_categories: {
+    room_events: {
+      filter?: { mentions?: MentionsFilter };
+    };
+  };
+};
+
 export const useMessageSearch = (params: MessageSearchParams) => {
   const mx = useMatrixClient();
-  const { term, order, rooms, senders } = params;
+  const { term, order, rooms, senders, mentions } = params;
 
   const searchMessages = useCallback(
     async (nextBatch?: string) => {
-      if (!term)
-        return {
-          highlights: [],
-          groups: [],
-        };
       const limit = 20;
 
-      const requestBody: ISearchRequestBody = {
+      const body: SearchRequestBody = {
         search_categories: {
           room_events: {
             event_context: {
@@ -94,21 +104,22 @@ export const useMessageSearch = (params: MessageSearchParams) => {
               limit,
               rooms,
               senders,
+              mentions,
             },
             include_state: false,
             order_by: order as SearchOrderBy.Recent,
-            search_term: term,
+            search_term: term ?? '',
           },
         },
       };
 
       const r = await mx.search({
-        body: requestBody,
+        body,
         next_batch: nextBatch === '' ? undefined : nextBatch,
       });
       return parseSearchResult(r);
     },
-    [mx, term, order, rooms, senders]
+    [mx, term, order, rooms, senders, mentions]
   );
 
   return searchMessages;
