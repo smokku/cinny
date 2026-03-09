@@ -684,7 +684,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }),
     [mx, room, linkifyOpts, spoilerClickHandler, mentionClickHandler, useAuthentication]
   );
-  const parseMemberEvent = useMemberEventParser();
+  const parseMemberEvent = useMemberEventParser(mentionClickHandler);
 
   const [timeline, setTimeline] = useState<Timeline>(() =>
     eventId ? getEmptyTimeline() : getInitialTimeline(room)
