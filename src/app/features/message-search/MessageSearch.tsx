@@ -23,6 +23,7 @@ import { SearchResultGroup } from './SearchResultGroup';
 import { SearchInput } from './SearchInput';
 import { SearchFilters } from './SearchFilters';
 import { VirtualTile } from '../../components/virtualizer';
+import { parseSearchOperators } from './parseSearchOperators';
 
 const useSearchPathSearchParams = (searchParams: URLSearchParams): _SearchPathSearchParams =>
   useMemo(
@@ -32,6 +33,7 @@ const useSearchPathSearchParams = (searchParams: URLSearchParams): _SearchPathSe
       order: searchParams.get('order') ?? undefined,
       rooms: searchParams.get('rooms') ?? undefined,
       senders: searchParams.get('senders') ?? undefined,
+      mentions: searchParams.get('mentions') ?? undefined,
     }),
     [searchParams]
   );
@@ -66,6 +68,37 @@ export function MessageSearch({
   const searchPathSearchParams = useSearchPathSearchParams(searchParams);
   const { navigateRoom } = useRoomNavigate();
 
+  const userId = mx.getUserId();
+
+  const synthesizedInputValue = useMemo(() => {
+    const parts: string[] = [];
+    if (searchPathSearchParams.senders) {
+      decodeSearchParamValueArray(searchPathSearchParams.senders).forEach((s) =>
+        parts.push(`from:${s === userId ? 'me' : s}`)
+      );
+    }
+    if (searchPathSearchParams.mentions) {
+      decodeSearchParamValueArray(searchPathSearchParams.mentions).forEach((m) =>
+        parts.push(`mentions:${m === userId ? 'me' : m}`)
+      );
+    }
+    if (searchPathSearchParams.term) {
+      parts.push(searchPathSearchParams.term);
+    }
+    return parts.join(' ');
+  }, [
+    searchPathSearchParams.term,
+    searchPathSearchParams.senders,
+    searchPathSearchParams.mentions,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (searchInputRef.current) {
+      searchInputRef.current.value = synthesizedInputValue;
+    }
+  }, [synthesizedInputValue]);
+
   const searchParamRooms = useMemo(() => {
     if (searchPathSearchParams.rooms) {
       const joinedRoomIds = decodeSearchParamValueArray(searchPathSearchParams.rooms).filter(
@@ -82,6 +115,17 @@ export function MessageSearch({
     return undefined;
   }, [searchPathSearchParams.senders]);
 
+  const sendersMe = !!searchParamsSenders && !!userId && searchParamsSenders.includes(userId);
+
+  const searchParamMentions = useMemo(() => {
+    if (!searchPathSearchParams.mentions) return undefined;
+    const ids = decodeSearchParamValueArray(searchPathSearchParams.mentions);
+    return { user_ids: ids };
+  }, [searchPathSearchParams.mentions]);
+
+  const mentionsMe =
+    !!searchParamMentions && !!userId && searchParamMentions.user_ids.includes(userId);
+
   const msgSearchParams: MessageSearchParams = useMemo(() => {
     const isGlobal = searchPathSearchParams.global === 'true';
     const defaultRooms = isGlobal ? undefined : rooms;
@@ -91,19 +135,38 @@ export function MessageSearch({
       order: searchPathSearchParams.order ?? SearchOrderBy.Recent,
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
+      mentions: searchParamMentions,
     };
-  }, [searchPathSearchParams, searchParamRooms, searchParamsSenders, rooms, senders]);
+  }, [
+    searchPathSearchParams,
+    searchParamRooms,
+    searchParamsSenders,
+    searchParamMentions,
+    rooms,
+    senders,
+  ]);
 
   const searchMessages = useMessageSearch(msgSearchParams);
 
+  const isSearchActive = useMemo(
+    () =>
+      !!(
+        msgSearchParams.term ||
+        (msgSearchParams.senders && msgSearchParams.senders.length > 0) ||
+        (msgSearchParams.mentions && msgSearchParams.mentions.user_ids.length > 0)
+      ),
+    [msgSearchParams]
+  );
+
   const { status, data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    enabled: !!msgSearchParams.term,
+    enabled: isSearchActive,
     queryKey: [
       'search',
       msgSearchParams.term,
       msgSearchParams.order,
       msgSearchParams.rooms,
       msgSearchParams.senders,
+      msgSearchParams.mentions,
     ],
     queryFn: ({ pageParam }) => searchMessages(pageParam),
     initialPageParam: '',
@@ -124,11 +187,31 @@ export function MessageSearch({
   });
   const vItems = virtualizer.getVirtualItems();
 
-  const handleSearch = (term: string) => {
+  const resolveMe = (id: string) => (id === 'me' && userId ? userId : id);
+
+  const handleSearch = (rawInput: string) => {
+    const parsed = parseSearchOperators(rawInput);
+
     setSearchParams((prevParams) => {
       const newParams = new URLSearchParams(prevParams);
+
       newParams.delete('term');
-      newParams.append('term', term);
+      if (parsed.searchTerm) {
+        newParams.append('term', parsed.searchTerm);
+      }
+
+      newParams.delete('senders');
+      if (parsed.fromUsers.length > 0) {
+        const senderIds = parsed.fromUsers.map(resolveMe);
+        newParams.append('senders', encodeSearchParamValueArray(senderIds));
+      }
+
+      newParams.delete('mentions');
+      if (parsed.mentionUsers.length > 0) {
+        const mentionIds = parsed.mentionUsers.map(resolveMe);
+        newParams.append('mentions', encodeSearchParamValueArray(mentionIds));
+      }
+
       return newParams;
     });
   };
@@ -139,6 +222,8 @@ export function MessageSearch({
     setSearchParams((prevParams) => {
       const newParams = new URLSearchParams(prevParams);
       newParams.delete('term');
+      newParams.delete('senders');
+      newParams.delete('mentions');
       return newParams;
     });
   };
@@ -175,6 +260,30 @@ export function MessageSearch({
     });
   };
 
+  const handleSendersMeChange = (enabled: boolean) => {
+    if (!userId) return;
+    setSearchParams((prevParams) => {
+      const newParams = new URLSearchParams(prevParams);
+      newParams.delete('senders');
+      if (enabled) {
+        newParams.append('senders', encodeSearchParamValueArray([userId]));
+      }
+      return newParams;
+    });
+  };
+
+  const handleMentionsMeChange = (enabled: boolean) => {
+    if (!userId) return;
+    setSearchParams((prevParams) => {
+      const newParams = new URLSearchParams(prevParams);
+      newParams.delete('mentions');
+      if (enabled) {
+        newParams.append('mentions', encodeSearchParamValueArray([userId]));
+      }
+      return newParams;
+    });
+  };
+
   const lastVItem = vItems[vItems.length - 1];
   const lastVItemIndex: number | undefined = lastVItem?.index;
   const lastGroupIndex = groups.length - 1;
@@ -205,7 +314,7 @@ export function MessageSearch({
       </ScrollTopContainer>
       <Box ref={scrollTopAnchorRef} direction="Column" gap="300">
         <SearchInput
-          active={!!msgSearchParams.term}
+          active={isSearchActive}
           loading={status === 'pending'}
           searchInputRef={searchInputRef}
           onSearch={handleSearch}
@@ -221,10 +330,14 @@ export function MessageSearch({
           onGlobalChange={handleGlobalChange}
           order={msgSearchParams.order}
           onOrderChange={handleOrderChange}
+          sendersMe={sendersMe}
+          onSendersMeChange={handleSendersMeChange}
+          mentionsMe={mentionsMe}
+          onMentionsMeChange={handleMentionsMeChange}
         />
       </Box>
 
-      {!msgSearchParams.term && status === 'pending' && (
+      {!isSearchActive && status === 'pending' && (
         <PageHeroEmpty>
           <PageHeroSection>
             <PageHero
@@ -236,7 +349,7 @@ export function MessageSearch({
         </PageHeroEmpty>
       )}
 
-      {msgSearchParams.term && groups.length === 0 && status === 'success' && (
+      {isSearchActive && groups.length === 0 && status === 'success' && (
         <Box
           className={ContainerColor({ variant: 'Warning' })}
           style={{ padding: config.space.S300, borderRadius: config.radii.R400 }}
@@ -245,13 +358,18 @@ export function MessageSearch({
         >
           <Icon size="200" src={Icons.Info} />
           <Text>
-            No results found for <b>{`"${msgSearchParams.term}"`}</b>
+            No results found
+            {msgSearchParams.term ? (
+              <>
+                {' '}
+                for <b>{`"${msgSearchParams.term}"`}</b>
+              </>
+            ) : null}
           </Text>
         </Box>
       )}
 
-      {((msgSearchParams.term && status === 'pending') ||
-        (groups.length > 0 && vItems.length === 0)) && (
+      {((isSearchActive && status === 'pending') || (groups.length > 0 && vItems.length === 0)) && (
         <Box direction="Column" gap="100">
           {[...Array(8).keys()].map((key) => (
             <SequenceCard variant="SurfaceVariant" key={key} style={{ minHeight: toRem(80) }} />
@@ -262,7 +380,9 @@ export function MessageSearch({
       {vItems.length > 0 && (
         <Box direction="Column" gap="300">
           <Box direction="Column" gap="200">
-            <Text size="H5">{`Results for "${msgSearchParams.term}"`}</Text>
+            <Text size="H5">
+              {msgSearchParams.term ? `Results for "${msgSearchParams.term}"` : 'Results'}
+            </Text>
             <Line size="300" variant="Surface" />
           </Box>
           <div

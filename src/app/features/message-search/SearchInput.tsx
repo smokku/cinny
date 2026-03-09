@@ -32,7 +32,7 @@ export function SearchInput({ active, loading, searchInputRef, onSearch, onReset
         autoFocus
         size="500"
         variant="Background"
-        placeholder="Search for keyword"
+        placeholder="Search (keyword from:user mentions:me)"
         autoComplete="off"
         before={
           active && loading ? (
