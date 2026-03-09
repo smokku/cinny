@@ -4,10 +4,10 @@ import classNames from 'classnames';
 import * as css from './layout.css';
 
 export const MessageBase = as<'div', css.MessageBaseVariants>(
-  ({ className, highlight, selected, collapse, autoCollapse, space, ...props }, ref) => (
+  ({ className, highlight, selected, collapse, autoCollapse, hover, space, ...props }, ref) => (
     <div
       className={classNames(
-        css.MessageBase({ highlight, selected, collapse, autoCollapse, space }),
+        css.MessageBase({ highlight, selected, collapse, autoCollapse, hover, space }),
         className
       )}
       {...props}
