@@ -914,6 +914,7 @@ export const Message = as<'div', MessageProps>(
         tabIndex={0}
         space={messageSpacing}
         collapse={collapse}
+        hover
         highlight={highlight}
         selected={!!menuAnchor || !!emojiBoardAnchor}
         {...props}
@@ -1248,6 +1249,7 @@ export const Event = as<'div', EventProps>(
         tabIndex={0}
         space={messageSpacing}
         autoCollapse
+        hover
         highlight={highlight}
         selected={!!menuAnchor}
         {...props}
