@@ -1,9 +1,12 @@
-import React, { ReactNode } from 'react';
+import React, { ReactEventHandler, ReactNode } from 'react';
 import { IconSrc, Icons } from 'folds';
 import { MatrixEvent } from 'matrix-js-sdk';
 import { IMemberContent, Membership } from '../../types/matrix/room';
+import { makeMentionCustomProps } from '../plugins/react-custom-html-parser';
+import { getMatrixToUser } from '../plugins/matrix-to';
 import { getMxIdLocalPart } from '../utils/matrix';
 import { isMembershipChanged } from '../utils/room';
+import * as css from './useMemberEventParser.css';
 
 export type ParsedResult = {
   icon: IconSrc;
@@ -12,7 +15,20 @@ export type ParsedResult = {
 
 export type MemberEventParser = (mEvent: MatrixEvent) => ParsedResult;
 
-export const useMemberEventParser = (): MemberEventParser => {
+export const useMemberEventParser = (
+  handleMentionClick?: ReactEventHandler<HTMLElement>
+): MemberEventParser => {
+  const renderUserLink = (id: string, name: string) => (
+    <a
+      href={getMatrixToUser(id)}
+      {...makeMentionCustomProps(handleMentionClick)}
+      className={css.MemberEventUserLink}
+      data-mention-id={id}
+    >
+      <b>{name}</b>
+    </a>
+  );
+
   const parseMemberEvent: MemberEventParser = (mEvent) => {
     const content = mEvent.getContent<IMemberContent>();
     const prevContent = mEvent.getPrevContent() as IMemberContent;
@@ -26,11 +42,12 @@ export const useMemberEventParser = (): MemberEventParser => {
         body: 'Broken membership event',
       };
 
-    const senderName = getMxIdLocalPart(senderId);
+    const senderName = getMxIdLocalPart(senderId) ?? senderId;
+    const userNameFromId = getMxIdLocalPart(userId) ?? userId;
     const userName =
       typeof content.displayname === 'string'
-        ? content.displayname || getMxIdLocalPart(userId)
-        : getMxIdLocalPart(userId);
+        ? content.displayname || userNameFromId
+        : userNameFromId;
 
     if (isMembershipChanged(mEvent)) {
       if (content.membership === Membership.Invite) {
@@ -79,7 +96,7 @@ export const useMemberEventParser = (): MemberEventParser => {
           icon: Icons.ArrowGoRight,
           body: (
             <>
-              <b>{userName}</b>
+              {renderUserLink(userId, userName)}
               {' joined the room'}
             </>
           ),
@@ -149,7 +166,7 @@ export const useMemberEventParser = (): MemberEventParser => {
           body:
             senderId === userId ? (
               <>
-                <b>{userName}</b>
+                {renderUserLink(userId, userName)}
                 {' left the room '}
                 {reason}
               </>
@@ -180,8 +197,8 @@ export const useMemberEventParser = (): MemberEventParser => {
     if (content.displayname !== prevContent.displayname) {
       const prevUserName =
         typeof prevContent.displayname === 'string'
-          ? prevContent.displayname || getMxIdLocalPart(userId)
-          : getMxIdLocalPart(userId);
+          ? prevContent.displayname || userNameFromId
+          : userNameFromId;
 
       return {
         icon: Icons.Mention,
