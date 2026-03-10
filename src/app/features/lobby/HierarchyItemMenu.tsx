@@ -64,9 +64,10 @@ function SuggestMenuItem({
       size="300"
       radii="300"
       before={toggleState.status === AsyncStatus.Loading && <Spinner size="100" />}
+      after={<Icon size="100" src={content.suggested ? Icons.Cross : Icons.Check} />}
       disabled={toggleState.status === AsyncStatus.Loading}
     >
-      <Text as="span" size="T300" truncate>
+      <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
         {content.suggested ? 'Unset Suggested' : 'Set Suggested'}
       </Text>
     </MenuItem>
@@ -108,9 +109,10 @@ function RemoveMenuItem({
           <Spinner variant="Critical" fill="Soft" size="100" />
         )
       }
+      after={<Icon size="100" src={Icons.Delete} />}
       disabled={removeState.status === AsyncStatus.Loading}
     >
-      <Text as="span" size="T300" truncate>
+      <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
         Remove
       </Text>
     </MenuItem>
@@ -142,10 +144,11 @@ function InviteMenuItem({
         radii="300"
         variant="Primary"
         fill="None"
+        after={<Icon size="100" src={Icons.UserPlus} />}
         aria-pressed={invitePrompt}
         disabled={disabled || !room}
       >
-        <Text as="span" size="T300" truncate>
+        <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
           Invite
         </Text>
       </MenuItem>
@@ -185,8 +188,14 @@ function SettingsMenuItem({
   };
 
   return (
-    <MenuItem onClick={handleSettings} size="300" radii="300" disabled={disabled}>
-      <Text as="span" size="T300" truncate>
+    <MenuItem
+      onClick={handleSettings}
+      size="300"
+      radii="300"
+      after={<Icon size="100" src={Icons.Setting} />}
+      disabled={disabled}
+    >
+      <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
         Settings
       </Text>
     </MenuItem>
@@ -261,19 +270,20 @@ export function HierarchyItemMenu({
                 escapeDeactivates: stopPropagation,
               }}
             >
-              <Menu style={{ maxWidth: toRem(150), width: '100vw' }}>
+              <Menu style={{ maxWidth: toRem(180), width: '100vw' }}>
                 {joined && (
                   <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                     {onTogglePin && (
                       <MenuItem
                         size="300"
                         radii="300"
+                        after={<Icon size="100" src={Icons.Pin} />}
                         onClick={() => {
                           onTogglePin(item.roomId);
                           handleRequestClose();
                         }}
                       >
-                        <Text as="span" size="T300" truncate>
+                        <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
                           {pinned ? 'Unpin from Sidebar' : 'Pin to Sidebar'}
                         </Text>
                       </MenuItem>
