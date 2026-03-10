@@ -132,6 +132,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { UserAvatar } from '../../components/user-avatar';
+import { nicknamesAtom } from '../../state/nicknames';
+import { profilesCacheAtom } from '../../state/userRoomProfile';
+import { ClientSideHoverFreeze } from '../../components/ClientSideHoverFreeze';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -595,12 +598,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const showUrlPreview = room.hasEncryptionStateEvent() ? encUrlPreview : urlPreview;
   const [showHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
   const [showDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+  const [autoplayStickers] = useSetting(settingsAtom, 'autoplayStickers');
+  const [autoplayEmojis] = useSetting(settingsAtom, 'autoplayEmojis');
 
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
 
   const ignoredUsersList = useIgnoredUsers();
   const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(room.roomId));
   const openThreadId = useAtomValue(roomIdToOpenThreadAtomFamily(room.roomId));
@@ -626,6 +632,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const canSendReaction = permissions.event(MessageEvent.Reaction, mx.getSafeUserId());
   const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents, mx.getSafeUserId());
   const [editId, setEditId] = useState<string>();
+  const globalProfiles = useAtomValue(profilesCacheAtom);
 
   const roomToParents = useAtomValue(roomToParentsAtom);
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
@@ -668,10 +675,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     () => ({
       ...LINKIFY_OPTS,
       render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+        renderMatrixMention(
+          mx,
+          room.roomId,
+          href,
+          makeMentionCustomProps(mentionClickHandler),
+          nicknames
+        )
       ),
     }),
-    [mx, room, mentionClickHandler]
+    [mx, room, mentionClickHandler, nicknames]
   );
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
@@ -680,8 +693,19 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         useAuthentication,
         handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
+        nicknames,
+        autoplayEmojis,
       }),
-    [mx, room, linkifyOpts, spoilerClickHandler, mentionClickHandler, useAuthentication]
+    [
+      mx,
+      room,
+      linkifyOpts,
+      spoilerClickHandler,
+      mentionClickHandler,
+      useAuthentication,
+      nicknames,
+      autoplayEmojis,
+    ]
   );
   const parseMemberEvent = useMemberEventParser(mentionClickHandler);
 
@@ -1085,14 +1109,38 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         console.warn('Button should have "data-user-id" attribute!');
         return;
       }
+      const cachedData = globalProfiles[userId];
+      const cleanExtended = cachedData?.extended ? { ...cachedData.extended } : undefined;
+
+      if (cleanExtended) {
+        delete cleanExtended.avatar_url;
+        delete cleanExtended.displayname;
+        delete cleanExtended['io.fsky.nyx.pronouns'];
+        delete cleanExtended['moe.sable.app.bio'];
+        delete cleanExtended['chat.commet.profile_bio'];
+        delete cleanExtended['chat.commet.profile_status'];
+        delete cleanExtended['us.cloke.msc4175.tz'];
+        delete cleanExtended['m.tz'];
+        delete cleanExtended['chat.commet.profile_banner'];
+      }
+
       openUserRoomProfile(
         room.roomId,
         space?.roomId,
         userId,
-        evt.currentTarget.getBoundingClientRect()
+        evt.currentTarget.getBoundingClientRect(),
+        undefined,
+        {
+          pronouns: cachedData?.pronouns,
+          bio: cachedData?.bio,
+          timezone: cachedData?.timezone,
+          bannerUrl: cachedData?.bannerUrl,
+          status: cachedData?.status,
+          extended: cleanExtended,
+        }
       );
     },
-    [room, space, openUserRoomProfile]
+    [room, space, openUserRoomProfile, globalProfiles]
   );
   const handleUsernameClick: MouseEventHandler<HTMLButtonElement> = useCallback(
     (evt) => {
@@ -1102,7 +1150,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         console.warn('Button should have "data-user-id" attribute!');
         return;
       }
-      const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+      const name =
+        getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;
       editor.insertNode(
         createMentionElement(
           userId,
@@ -1113,7 +1162,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       ReactEditor.focus(editor);
       moveCursor(editor);
     },
-    [mx, room, editor]
+    [mx, room, editor, nicknames]
   );
 
   const handleReplyClick: MouseEventHandler<HTMLButtonElement> = useCallback(
@@ -1195,7 +1244,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
         const senderId = mEvent.getSender() ?? '';
         const senderDisplayName =
-          getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+          getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId;
 
         return (
           <Message
@@ -1379,7 +1428,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                         <ImageContent
                           {...props}
                           autoPlay={mediaAutoLoad}
-                          renderImage={(p) => <Image {...p} loading="lazy" />}
+                          renderImage={(p) => {
+                            if (!autoplayStickers && p.src) {
+                              return (
+                                <ClientSideHoverFreeze src={p.src}>
+                                  <Image {...p} loading="lazy" />
+                                </ClientSideHoverFreeze>
+                              );
+                            }
+                            return <Image {...p} loading="lazy" />;
+                          }}
                           renderViewer={(p) => <ImageViewer {...p} />}
                         />
                       )}
@@ -1393,7 +1451,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
                   const senderId = mEvent.getSender() ?? '';
                   const senderDisplayName =
-                    getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+                    getMemberDisplayName(room, senderId, nicknames) ??
+                    getMxIdLocalPart(senderId) ??
+                    senderId;
                   return (
                     <RenderMessageContent
                       displayName={senderDisplayName}
@@ -1497,7 +1557,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                   <ImageContent
                     {...props}
                     autoPlay={mediaAutoLoad}
-                    renderImage={(p) => <Image {...p} loading="lazy" />}
+                    renderImage={(p) => {
+                      if (!autoplayStickers && p.src) {
+                        return (
+                          <ClientSideHoverFreeze src={p.src}>
+                            <Image {...p} loading="lazy" />
+                          </ClientSideHoverFreeze>
+                        );
+                      }
+                      return <Image {...p} loading="lazy" />;
+                    }}
                     renderViewer={(p) => <ImageViewer {...p} />}
                   />
                 )}
@@ -1554,7 +1623,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomName]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+        const senderName =
+          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1597,7 +1667,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomTopic]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+        const senderName =
+          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1640,7 +1711,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomAvatar]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+        const senderName =
+          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1683,7 +1755,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.GroupCallMemberPrefix]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+        const senderName =
+          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const content = mEvent.getContent<SessionMembershipData>();
         const prevContent = mEvent.getPrevContent();
@@ -1736,7 +1809,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (!showHiddenEvents) return null;
       const highlighted = focusItem?.index === item && focusItem.highlight;
       const senderId = mEvent.getSender() ?? '';
-      const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+      const senderName =
+        getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
       const timeJSX = (
         <Time
@@ -1786,7 +1860,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
       const highlighted = focusItem?.index === item && focusItem.highlight;
       const senderId = mEvent.getSender() ?? '';
-      const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+      const senderName =
+        getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
       const timeJSX = (
         <Time

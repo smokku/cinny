@@ -2,6 +2,7 @@ import React, { useEffect, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Editor } from 'slate';
 import { Avatar, Icon, Icons, MenuItem, Text } from 'folds';
 import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
 
 import { AutocompleteQuery } from './autocompleteQuery';
 import { AutocompleteMenu } from './AutocompleteMenu';
@@ -20,6 +21,7 @@ import { getMemberDisplayName, getMemberSearchStr } from '../../../utils/room';
 import { UserAvatar } from '../../user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Membership } from '../../../../types/matrix/room';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
@@ -92,6 +94,7 @@ export function UserMentionAutocomplete({
 }: UserMentionAutocompleteProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const nicknames = useAtomValue(nicknamesAtom);
   const roomId: string = room.roomId!;
   const roomAliasOrId = room.getCanonicalAlias() || roomId;
   const members = useRoomMembers(mx, roomId);
@@ -134,7 +137,9 @@ export function UserMentionAutocomplete({
   });
 
   const getName = (member: RoomMember) =>
-    getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+    getMemberDisplayName(room, member.userId, nicknames) ??
+    getMxIdLocalPart(member.userId) ??
+    member.userId;
 
   return (
     <AutocompleteMenu headerContent={<Text size="L400">Mentions</Text>} requestClose={requestClose}>

@@ -2,6 +2,7 @@ import { Box, config, Icon, Icons, Text } from 'folds';
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import React from 'react';
 import { Room } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
 import { UserAvatar } from '../../components/user-avatar';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -11,6 +12,7 @@ import { StackedAvatar } from '../../components/stacked-avatar';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../utils/dom';
 import * as css from './styles.css';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type MemberGlanceProps = {
   room: Room;
@@ -22,6 +24,7 @@ export function MemberGlance({ room, members, speakers, max = 6 }: MemberGlanceP
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const openUserProfile = useOpenUserRoomProfile();
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const visibleMembers = members.slice(0, max);
   const remainingCount = max && members.length > max ? members.length - max : 0;
@@ -31,7 +34,8 @@ export function MemberGlance({ room, members, speakers, max = 6 }: MemberGlanceP
       {visibleMembers.map((callMember) => {
         const userId = callMember.sender;
         if (!userId) return null;
-        const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+        const name =
+          getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;
         const avatarMxc = getMemberAvatarMxc(room, userId);
         const avatarUrl = avatarMxc
           ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined

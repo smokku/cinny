@@ -33,6 +33,10 @@ export interface Settings {
   encUrlPreview: boolean;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
+  autoplayGifs: boolean;
+  autoplayStickers: boolean;
+  autoplayEmojis: boolean;
+  showPronouns: boolean;
 
   showNotifications: boolean;
   isNotificationSounds: boolean;
@@ -67,6 +71,10 @@ const defaultSettings: Settings = {
   encUrlPreview: false,
   showHiddenEvents: false,
   legacyUsernameColor: false,
+  autoplayGifs: true,
+  autoplayStickers: true,
+  autoplayEmojis: true,
+  showPronouns: true,
 
   showNotifications: true,
   isNotificationSounds: true,

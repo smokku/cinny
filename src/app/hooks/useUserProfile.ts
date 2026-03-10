@@ -1,51 +1,118 @@
-import { useEffect, useState } from 'react';
-import { UserEvent, UserEventHandlerMap } from 'matrix-js-sdk';
+import { useEffect, useMemo } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { selectAtom } from 'jotai/utils';
+import { Room } from 'matrix-js-sdk';
+import { profilesCacheAtom } from '../state/userRoomProfile';
 import { useMatrixClient } from './useMatrixClient';
+
+const inFlightProfiles = new Map<string, Promise<any>>();
 
 export type UserProfile = {
   avatarUrl?: string;
   displayName?: string;
+  pronouns?: any[];
+  timezone?: string;
+  bio?: string;
+  status?: string;
+  bannerUrl?: string;
+  extended?: Record<string, any>;
+  _fetched?: boolean;
 };
-export const useUserProfile = (userId: string): UserProfile => {
-  const mx = useMatrixClient();
 
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    const user = mx.getUser(userId);
-    return {
-      avatarUrl: user?.avatarUrl,
-      displayName: user?.displayName,
-    };
+const normalizeInfo = (info: any): UserProfile => {
+  const knownKeys = [
+    'avatar_url',
+    'displayname',
+    'io.fsky.nyx.pronouns',
+    'us.cloke.msc4175.tz',
+    'm.tz',
+    'moe.sable.app.bio',
+    'chat.commet.profile_bio',
+    'chat.commet.profile_banner',
+    'chat.commet.profile_status',
+  ];
+
+  const extended: Record<string, any> = {};
+  Object.entries(info).forEach(([key, value]) => {
+    if (!knownKeys.includes(key)) {
+      extended[key] = value;
+    }
   });
 
+  return {
+    avatarUrl: info.avatar_url,
+    displayName: info.displayname,
+    pronouns: info['io.fsky.nyx.pronouns'],
+    timezone: info['us.cloke.msc4175.tz'] || info['m.tz'],
+    bio: info['moe.sable.app.bio'] || info['chat.commet.profile_bio'],
+    status: info['chat.commet.profile_status'],
+    bannerUrl: info['chat.commet.profile_banner'],
+    extended,
+    _fetched: true,
+  };
+};
+
+export const useUserProfile = (
+  userId: string,
+  _room?: Room,
+  initialProfile?: Partial<UserProfile>
+): UserProfile => {
+  const mx = useMatrixClient();
+  const userSelector = useMemo(() => selectAtom(profilesCacheAtom, (db) => db[userId]), [userId]);
+
+  const cached = useAtomValue(userSelector);
+  const setGlobalProfiles = useSetAtom(profilesCacheAtom);
+
+  const needsFetch = !!userId && userId !== 'undefined' && !cached?._fetched;
+
   useEffect(() => {
-    const user = mx.getUser(userId);
-    const onAvatarChange: UserEventHandlerMap[UserEvent.AvatarUrl] = (event, myUser) => {
-      setProfile((cp) => ({
-        ...cp,
-        avatarUrl: myUser.avatarUrl,
-      }));
-    };
-    const onDisplayNameChange: UserEventHandlerMap[UserEvent.DisplayName] = (event, myUser) => {
-      setProfile((cp) => ({
-        ...cp,
-        displayName: myUser.displayName,
-      }));
-    };
+    if (!needsFetch) return undefined;
 
-    mx.getProfileInfo(userId).then((info) =>
-      setProfile({
-        avatarUrl: info.avatar_url,
-        displayName: info.displayname,
+    let fetchPromise = inFlightProfiles.get(userId);
+
+    if (!fetchPromise) {
+      fetchPromise = mx.getProfileInfo(userId).finally(() => {
+        inFlightProfiles.delete(userId);
+      });
+      inFlightProfiles.set(userId, fetchPromise);
+    }
+
+    let isMounted = true;
+
+    fetchPromise
+      .then((info: any) => {
+        if (!isMounted) return;
+        const normalized = normalizeInfo(info);
+        setGlobalProfiles((prev) => ({
+          ...prev,
+          [userId]: { ...prev[userId], ...normalized },
+        }));
       })
-    );
+      .catch(() => {
+        if (!isMounted) return;
+        setGlobalProfiles((prev) => ({
+          ...prev,
+          [userId]: { ...prev[userId], _fetched: true },
+        }));
+      });
 
-    user?.on(UserEvent.AvatarUrl, onAvatarChange);
-    user?.on(UserEvent.DisplayName, onDisplayNameChange);
     return () => {
-      user?.removeListener(UserEvent.AvatarUrl, onAvatarChange);
-      user?.removeListener(UserEvent.DisplayName, onDisplayNameChange);
+      isMounted = false;
     };
-  }, [mx, userId]);
+  }, [userId, needsFetch, mx, setGlobalProfiles]);
 
-  return profile;
+  return useMemo(() => {
+    const fallback: UserProfile = {
+      displayName: initialProfile?.displayName ?? mx.getUser(userId)?.displayName,
+      avatarUrl: initialProfile?.avatarUrl ?? mx.getUser(userId)?.avatarUrl,
+      ...initialProfile,
+    };
+
+    if (!cached) return fallback;
+
+    return {
+      ...fallback,
+      ...cached,
+    };
+  }, [cached, userId, mx, initialProfile]);
 };

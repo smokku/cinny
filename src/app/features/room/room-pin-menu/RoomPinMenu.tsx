@@ -21,6 +21,7 @@ import {
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useAtomValue } from 'jotai';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
 import * as css from './RoomPinMenu.css';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -86,6 +87,7 @@ import {
   useGetMemberPowerTag,
 } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 type PinnedMessageProps = {
   room: Room;
@@ -114,6 +116,7 @@ function PinnedMessage({
   const pinnedEvent = useRoomEvent(room, eventId);
   const useAuthentication = useMediaAuthentication();
   const mx = useMatrixClient();
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const [unpinState, unpin] = useAsyncCallback(
     useCallback(() => {
@@ -175,7 +178,8 @@ function PinnedMessage({
     );
 
   const sender = pinnedEvent.getSender()!;
-  const displayName = getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender;
+  const displayName =
+    getMemberDisplayName(room, sender, nicknames) ?? getMxIdLocalPart(sender) ?? sender;
   const senderAvatarMxc = getMemberAvatarMxc(room, sender);
   const getContent = (() => pinnedEvent.getContent()) as GetContentCallback;
 
@@ -251,6 +255,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
   ({ room, requestClose }, ref) => {
     const mx = useMatrixClient();
     const userId = mx.getUserId()!;
+    const nicknames = useAtomValue(nicknamesAtom);
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
 
@@ -297,10 +302,16 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       () => ({
         ...LINKIFY_OPTS,
         render: factoryRenderLinkifyWithMention((href) =>
-          renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+          renderMatrixMention(
+            mx,
+            room.roomId,
+            href,
+            makeMentionCustomProps(mentionClickHandler),
+            nicknames
+          )
         ),
       }),
-      [mx, room, mentionClickHandler]
+      [mx, room, mentionClickHandler, nicknames]
     );
     const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
       () =>
@@ -309,8 +320,17 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           useAuthentication,
           handleSpoilerClick: spoilerClickHandler,
           handleMentionClick: mentionClickHandler,
+          nicknames,
         }),
-      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
+      [
+        mx,
+        room,
+        linkifyOpts,
+        mentionClickHandler,
+        spoilerClickHandler,
+        useAuthentication,
+        nicknames,
+      ]
     );
 
     const renderMatrixEvent = useMatrixEventRenderer<[MatrixEvent, string, GetContentCallback]>(

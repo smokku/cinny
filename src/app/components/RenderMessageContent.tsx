@@ -31,6 +31,9 @@ import { PdfViewer } from './Pdf-viewer';
 import { TextViewer } from './text-viewer';
 import { testMatrixTo } from '../plugins/matrix-to';
 import { IImageContent } from '../../types/matrix/common';
+import { useSetting } from '../state/hooks/settings';
+import { settingsAtom } from '../state/settings';
+import { ClientSideHoverFreeze } from './ClientSideHoverFreeze';
 
 type RenderMessageContentProps = {
   displayName: string;
@@ -58,6 +61,8 @@ export function RenderMessageContent({
   linkifyOpts,
   outlineAttachment,
 }: RenderMessageContentProps) {
+  const [autoplayGifs] = useSetting(settingsAtom, 'autoplayGifs');
+
   const renderUrlsPreview = (urls: string[]) => {
     const filteredUrls = urls.filter((url) => !testMatrixTo(url));
     if (filteredUrls.length === 0) return undefined;
@@ -184,15 +189,35 @@ export function RenderMessageContent({
   }
 
   if (msgType === MsgType.Image) {
+    const content: IImageContent = getContent();
+    const mimeType = content.info?.mimetype?.toLowerCase();
+    const body = content.body?.toLowerCase();
+    const isGif =
+      mimeType === 'image/gif' ||
+      mimeType === 'image/webp' ||
+      body?.endsWith('.gif') ||
+      body?.endsWith('.webp') ||
+      content.url?.toLowerCase().includes('gif');
+
     return (
       <>
         <MImage
-          content={getContent()}
+          content={content}
           renderImageContent={(props) => (
             <ImageContent
               {...props}
               autoPlay={mediaAutoLoad}
-              renderImage={(p) => <Image {...p} loading="lazy" />}
+              renderImage={(p) => {
+                if (isGif && !autoplayGifs && p.src) {
+                  return (
+                    <ClientSideHoverFreeze src={p.src}>
+                      <Image {...p} loading="lazy" />
+                    </ClientSideHoverFreeze>
+                  );
+                }
+
+                return <Image {...p} loading="lazy" />;
+              }}
               renderViewer={(p) => <ImageViewer {...p} />}
             />
           )}

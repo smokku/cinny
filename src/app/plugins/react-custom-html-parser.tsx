@@ -41,6 +41,7 @@ import {
 import { onEnterOrSpace } from '../utils/keyboard';
 import { copyToClipboard, tryDecodeURIComponent } from '../utils/dom';
 import { useTimeoutToggle } from '../hooks/useTimeoutToggle';
+import { ClientSideHoverFreeze } from '../components/ClientSideHoverFreeze';
 
 const ReactPrism = lazy(() => import('./react-prism/ReactPrism'));
 
@@ -75,7 +76,8 @@ export const renderMatrixMention = (
   mx: MatrixClient,
   currentRoomId: string | undefined,
   href: string,
-  customProps: ComponentPropsWithoutRef<'a'>
+  customProps: ComponentPropsWithoutRef<'a'>,
+  nicknames?: Record<string, string>
 ) => {
   const userId = parseMatrixToUser(href);
   if (userId) {
@@ -89,7 +91,8 @@ export const renderMatrixMention = (
         data-mention-id={userId}
       >
         {`@${
-          (currentRoom && getMemberDisplayName(currentRoom, userId)) ?? getMxIdLocalPart(userId)
+          (currentRoom && getMemberDisplayName(currentRoom, userId, nicknames)) ??
+          getMxIdLocalPart(userId)
         }`}
       </a>
     );
@@ -319,6 +322,8 @@ export const getReactCustomHtmlParser = (
     handleSpoilerClick?: ReactEventHandler<HTMLElement>;
     handleMentionClick?: ReactEventHandler<HTMLElement>;
     useAuthentication?: boolean;
+    nicknames?: Record<string, string>;
+    autoplayEmojis?: boolean;
   }
 ): HTMLReactParserOptions => {
   const opts: HTMLReactParserOptions = {
@@ -450,7 +455,8 @@ export const getReactCustomHtmlParser = (
             mx,
             roomId,
             tryDecodeURIComponent(props.href),
-            makeMentionCustomProps(params.handleMentionClick, content)
+            makeMentionCustomProps(params.handleMentionClick, content),
+            params.nicknames
           );
 
           if (mention) return mention;
@@ -474,6 +480,8 @@ export const getReactCustomHtmlParser = (
         }
 
         if (name === 'img') {
+          if (!props.src) return null;
+
           const htmlSrc = mxcUrlToHttp(mx, props.src, params.useAuthentication);
           if (htmlSrc && props.src.startsWith('mxc://') === false) {
             return (
@@ -486,7 +494,13 @@ export const getReactCustomHtmlParser = (
             return (
               <span className={css.EmoticonBase}>
                 <span className={css.Emoticon()}>
-                  <img {...props} className={css.EmoticonImg} src={htmlSrc} />
+                  {params.autoplayEmojis === false ? (
+                    <ClientSideHoverFreeze src={htmlSrc}>
+                      <img {...props} className={css.EmoticonImg} src={htmlSrc} />
+                    </ClientSideHoverFreeze>
+                  ) : (
+                    <img {...props} className={css.EmoticonImg} src={htmlSrc} />
+                  )}
                 </span>
               </span>
             );
