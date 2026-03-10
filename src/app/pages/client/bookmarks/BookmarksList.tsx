@@ -64,6 +64,7 @@ import colorMXID from '../../../../util/colorMXID';
 import { stopPropagation } from '../../../utils/keyboard';
 import { highlightText, makeHighlightRegex } from '../../../plugins/react-custom-html-parser';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 type RemoveBookmarkDialogProps = {
   open: boolean;
@@ -319,6 +320,7 @@ function BookmarkResultGroup({
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = mx.getRoom(roomId);
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const handleOpenClick: MouseEventHandler = (evt) => {
     const eventId = evt.currentTarget.getAttribute('data-event-id');
@@ -357,7 +359,7 @@ function BookmarkResultGroup({
       <Box direction="Column" gap="100">
         {items.map((item) => {
           const displayName = room
-            ? getMemberDisplayName(room, item.sender ?? '') ??
+            ? getMemberDisplayName(room, item.sender ?? '', nicknames) ??
               getMxIdLocalPart(item.sender ?? '') ??
               item.sender ??
               'Unknown'

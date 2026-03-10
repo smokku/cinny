@@ -31,6 +31,9 @@ import { PdfViewer } from './Pdf-viewer';
 import { TextViewer } from './text-viewer';
 import { testMatrixTo } from '../plugins/matrix-to';
 import { IImageContent } from '../../types/matrix/common';
+import { useSetting } from '../state/hooks/settings';
+import { settingsAtom } from '../state/settings';
+import { ClientSideHoverFreeze } from './ClientSideHoverFreeze';
 
 type RenderMessageContentProps = {
   displayName: string;
@@ -184,10 +187,12 @@ export function RenderMessageContent({
   }
 
   if (msgType === MsgType.Image) {
+    const content: IImageContent = getContent();
+
     return (
       <>
         <MImage
-          content={getContent()}
+          content={content}
           renderImageContent={(props) => (
             <ImageContent
               {...props}

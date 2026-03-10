@@ -1,13 +1,17 @@
 import React, { ReactNode } from 'react';
 import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
 import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../user-avatar';
+import { nicknamesAtom } from '../../state/nicknames';
 import * as css from './style.css';
 
-const getName = (room: Room, member: RoomMember) =>
-  getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+const getName = (room: Room, member: RoomMember, nicknames: Record<string, string>) =>
+  getMemberDisplayName(room, member.userId, nicknames) ??
+  getMxIdLocalPart(member.userId) ??
+  member.userId;
 
 type MemberTileProps = {
   mx: MatrixClient;
@@ -18,7 +22,8 @@ type MemberTileProps = {
 };
 export const MemberTile = as<'button', MemberTileProps>(
   ({ as: AsMemberTile = 'button', mx, room, member, useAuthentication, after, ...props }, ref) => {
-    const name = getName(room, member);
+    const nicknames = useAtomValue(nicknamesAtom);
+    const name = getName(room, member, nicknames);
     const username = getMxIdLocalPart(member.userId);
 
     const avatarMxcUrl = member.getMxcAvatarUrl();

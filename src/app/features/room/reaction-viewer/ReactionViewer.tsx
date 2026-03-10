@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import {
   Avatar,
   Box,
@@ -28,6 +29,7 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { getMouseEventCords } from '../../../utils/dom';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 export type ReactionViewerProps = {
   room: Room;
@@ -45,6 +47,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
     );
     const space = useSpaceOptionally();
     const openProfile = useOpenUserRoomProfile();
+    const nicknames = useAtomValue(nicknamesAtom);
 
     const [selectedKey, setSelectedKey] = useState<string>(() => {
       if (initialKey) return initialKey;
@@ -53,7 +56,9 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
     });
 
     const getName = (member: RoomMember) =>
-      getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+      getMemberDisplayName(room, member.userId, nicknames) ??
+      getMxIdLocalPart(member.userId) ??
+      member.userId;
 
     const getReactionsForKey = (key: string): MatrixEvent[] => {
       const reactSet = reactions.find(([k]) => k === key)?.[1];

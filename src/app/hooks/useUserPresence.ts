@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { User, UserEvent, UserEventHandlerMap } from 'matrix-js-sdk';
+import { MatrixEvent, User, UserEvent } from 'matrix-js-sdk';
 import { useMatrixClient } from './useMatrixClient';
 
 export enum Presence {
@@ -15,9 +15,22 @@ export type UserPresence = {
   lastActiveTs?: number;
 };
 
-const getUserPresence = (user: User): UserPresence => ({
+const getPresenceStatus = (user: User, event?: MatrixEvent): string | undefined => {
+  if (!event || event.getType() !== 'm.presence') return user.presenceStatusMsg;
+
+  const content = event.getContent() as Record<string, unknown>;
+
+  if ('status_msg' in content) {
+    return typeof content.status_msg === 'string' ? content.status_msg : undefined;
+  }
+
+  // Event updated presence but not status_msg — clear it
+  return content.presence ? undefined : user.presenceStatusMsg;
+};
+
+const getUserPresence = (user: User, event?: MatrixEvent): UserPresence => ({
   presence: user.presence as Presence,
-  status: user.presenceStatusMsg,
+  status: getPresenceStatus(user, event),
   active: user.currentlyActive,
   lastActiveTs: user.getLastActiveTs(),
 });
@@ -26,12 +39,14 @@ export const useUserPresence = (userId: string): UserPresence | undefined => {
   const mx = useMatrixClient();
   const user = mx.getUser(userId);
 
-  const [presence, setPresence] = useState(() => (user ? getUserPresence(user) : undefined));
+  const [presence, setPresence] = useState(() =>
+    user ? getUserPresence(user, user.events.presence) : undefined
+  );
 
   useEffect(() => {
-    const updatePresence: UserEventHandlerMap[UserEvent.Presence] = (event, u) => {
+    const updatePresence = (event: MatrixEvent | undefined, u: User) => {
       if (u.userId === user?.userId) {
-        setPresence(getUserPresence(user));
+        setPresence(getUserPresence(user, event ?? user.events.presence));
       }
     };
     user?.on(UserEvent.Presence, updatePresence);

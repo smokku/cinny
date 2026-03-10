@@ -31,6 +31,7 @@ import { MatrixClientProvider } from '../../hooks/useMatrixClient';
 import { SpecVersions } from './SpecVersions';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useSyncState } from '../../hooks/useSyncState';
+import { useSyncNicknames } from '../../hooks/useNickname';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
@@ -160,6 +161,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     useCallback((m) => startClient(m), [])
   );
 
+  useSyncNicknames(mx);
   useLogoutListener(mx);
 
   useEffect(() => {

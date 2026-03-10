@@ -35,6 +35,7 @@ import { useHover, useFocusWithin } from 'react-aria';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
 import {
   AvatarBase,
@@ -53,7 +54,8 @@ import {
   getMemberDisplayName,
 } from '../../../utils/room';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
-import { MessageLayout, MessageSpacing } from '../../../state/settings';
+import { MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+import { useSetting } from '../../../state/hooks/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
 import * as css from './styles.css';
@@ -76,6 +78,9 @@ import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import { computeBookmarkId, createBookmarkItem } from '../../bookmarks/bookmarkDomain';
 import { useIsBookmarked, useBookmarkActions } from '../../bookmarks/useBookmarks';
+import { nicknamesAtom, setNicknameAtom } from '../../../state/nicknames';
+import { useUserProfile } from '../../../hooks/useUserProfile';
+import { useBlobCache } from '../../../hooks/useBlobCache';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -118,6 +123,21 @@ export const MessageQuickReactions = as<'div', MessageQuickReactionsProps>(
     );
   }
 );
+
+const getPronounSummaries = (pronouns: any[] | undefined): string[] => {
+  if (!Array.isArray(pronouns)) return [];
+
+  return pronouns
+    .map((item) => {
+      if (typeof item === 'string') return item.trim();
+      if (item && typeof item === 'object' && typeof item.summary === 'string') {
+        return item.summary.trim();
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+};
 
 export const MessageAllReactionItem = as<
   'button',
@@ -756,16 +776,27 @@ export const Message = as<'div', MessageProps>(
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const senderId = mEvent.getSender() ?? '';
+    const nicknames = useAtomValue(nicknamesAtom);
+    const setNickname = useSetAtom(setNicknameAtom);
+    const profile = useUserProfile(senderId, room);
+    const [showPronouns] = useSetting(settingsAtom, 'showPronouns');
+    const pronounSummaries = getPronounSummaries(profile.pronouns);
 
     const [hover, setHover] = useState(false);
     const { hoverProps } = useHover({ onHoverChange: setHover });
     const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
+    const [nickEditOpen, setNickEditOpen] = useState(false);
+    const [nickDraft, setNickDraft] = useState('');
 
     const senderDisplayName =
-      getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+      getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId;
     const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
+    const avatarUrl = senderAvatarMxc
+      ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ?? undefined
+      : undefined;
+    const cachedAvatarUrl = useBlobCache(avatarUrl);
 
     const tagColor = memberPowerTag?.color
       ? accessibleTagColors?.get(memberPowerTag.color)
@@ -800,6 +831,22 @@ export const Message = as<'div', MessageProps>(
               <UsernameBold>{senderDisplayName}</UsernameBold>
             </Text>
           </Username>
+          {showPronouns && pronounSummaries.length > 0 && (
+            <Text
+              as="span"
+              size="T200"
+              priority="300"
+              style={{
+                border: `${config.borderWidth.B300} solid ${
+                  usernameColor ?? color.Surface.ContainerLine
+                }`,
+                borderRadius: config.radii.Pill,
+                padding: `0 ${config.space.S100}`,
+              }}
+            >
+              {pronounSummaries.join(', ')}
+            </Text>
+          )}
           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
         </Box>
         <Box shrink="No" gap="100">
@@ -836,11 +883,7 @@ export const Message = as<'div', MessageProps>(
         >
           <UserAvatar
             userId={senderId}
-            src={
-              senderAvatarMxc
-                ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ?? undefined
-                : undefined
-            }
+            src={cachedAvatarUrl}
             alt={senderDisplayName}
             renderFallback={() => <Icon size="200" src={Icons.User} filled />}
           />
@@ -889,6 +932,7 @@ export const Message = as<'div', MessageProps>(
 
     const closeMenu = () => {
       setMenuAnchor(undefined);
+      setNickEditOpen(false);
     };
 
     const handleOpenEmojiBoard: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -1001,7 +1045,7 @@ export const Message = as<'div', MessageProps>(
                     <FocusTrap
                       focusTrapOptions={{
                         initialFocus: false,
-                        onDeactivate: () => setMenuAnchor(undefined),
+                        onDeactivate: closeMenu,
                         clickOutsideDeactivates: true,
                         isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
                         isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
@@ -1122,6 +1166,87 @@ export const Message = as<'div', MessageProps>(
                           {canPinEvent && (
                             <MessagePinItem room={room} mEvent={mEvent} onClose={closeMenu} />
                           )}
+                          {senderId !== mx.getUserId() &&
+                            (nickEditOpen ? (
+                              <Box
+                                direction="Column"
+                                gap="100"
+                                style={{ padding: `${config.space.S100} ${config.space.S200}` }}
+                              >
+                                <Text size="L400">Nickname</Text>
+                                <input
+                                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                                  autoFocus
+                                  value={nickDraft}
+                                  onChange={(e) => setNickDraft(e.target.value)}
+                                  placeholder={senderDisplayName}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      setNickname(senderId, nickDraft || undefined, mx);
+                                      closeMenu();
+                                    }
+                                    if (e.key === 'Escape') closeMenu();
+                                  }}
+                                  style={{
+                                    background: color.Surface.Container,
+                                    color: color.Surface.OnContainer,
+                                    border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+                                    borderRadius: '6px',
+                                    padding: '4px 8px',
+                                    fontSize: '14px',
+                                    width: '100%',
+                                    outline: 'none',
+                                  }}
+                                />
+                                <Box gap="200">
+                                  <MenuItem
+                                    size="300"
+                                    radii="300"
+                                    variant="Success"
+                                    fill="None"
+                                    onClick={() => {
+                                      setNickname(senderId, nickDraft || undefined, mx);
+                                      closeMenu();
+                                    }}
+                                  >
+                                    <Text size="B300">Save</Text>
+                                  </MenuItem>
+                                  {nicknames[senderId] && (
+                                    <MenuItem
+                                      size="300"
+                                      radii="300"
+                                      variant="Critical"
+                                      fill="None"
+                                      onClick={() => {
+                                        setNickname(senderId, undefined, mx);
+                                        closeMenu();
+                                      }}
+                                    >
+                                      <Text size="B300">Clear</Text>
+                                    </MenuItem>
+                                  )}
+                                </Box>
+                              </Box>
+                            ) : (
+                              <MenuItem
+                                size="300"
+                                after={<Icon size="100" src={Icons.Pencil} />}
+                                radii="300"
+                                onClick={() => {
+                                  setNickDraft(nicknames[senderId] ?? '');
+                                  setNickEditOpen(true);
+                                }}
+                              >
+                                <Text
+                                  className={css.MessageMenuItemText}
+                                  as="span"
+                                  size="T300"
+                                  truncate
+                                >
+                                  {nicknames[senderId] ? 'Edit Nickname' : 'Set Nickname'}
+                                </Text>
+                              </MenuItem>
+                            ))}
                         </Box>
                         {((!mEvent.isRedacted() && canDelete) ||
                           mEvent.getSender() !== mx.getUserId()) && (

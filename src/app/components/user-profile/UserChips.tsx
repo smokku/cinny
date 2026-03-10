@@ -1,4 +1,12 @@
-import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
+import React, {
+  KeyboardEventHandler,
+  MouseEventHandler,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
@@ -7,6 +15,7 @@ import {
   PopOut,
   Menu,
   MenuItem,
+  color,
   config,
   Text,
   Line,
@@ -45,6 +54,7 @@ import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
+import { useNickname, useSetNickname } from '../../hooks/useNickname';
 
 export function ServerChip({ server }: { server: string }) {
   const mx = useMatrixClient();
@@ -445,12 +455,17 @@ export function IgnoredUserAlert() {
 export function OptionsChip({ userId }: { userId: string }) {
   const mx = useMatrixClient();
   const [cords, setCords] = useState<RectCords>();
+  const [editingNick, setEditingNick] = useState(false);
+  const nickInputRef = useRef<HTMLInputElement>(null);
 
   const open: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setCords(evt.currentTarget.getBoundingClientRect());
   };
 
-  const close = () => setCords(undefined);
+  const close = () => {
+    setCords(undefined);
+    setEditingNick(false);
+  };
 
   const ignoredUsers = useIgnoredUsers();
   const ignored = ignoredUsers.includes(userId);
@@ -463,6 +478,25 @@ export function OptionsChip({ userId }: { userId: string }) {
     }, [mx, ignoredUsers, userId, ignored])
   );
   const ignoring = ignoreState.status === AsyncStatus.Loading;
+  const currentNick = useNickname(userId);
+  const setNickname = useSetNickname();
+
+  useEffect(() => {
+    if (editingNick) {
+      nickInputRef.current?.focus();
+    }
+  }, [editingNick]);
+
+  const handleSaveNick = () => {
+    const value = nickInputRef.current?.value ?? '';
+    setNickname(userId, value || undefined);
+    close();
+  };
+
+  const handleNickKeyDown: KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') handleSaveNick();
+    if (e.key === 'Escape') close();
+  };
 
   return (
     <PopOut
@@ -483,6 +517,67 @@ export function OptionsChip({ userId }: { userId: string }) {
         >
           <Menu>
             <div style={{ padding: config.space.S100 }}>
+              {editingNick ? (
+                <Box
+                  direction="Column"
+                  gap="100"
+                  style={{ padding: `${config.space.S100} ${config.space.S200}` }}
+                >
+                  <Text size="L400">Nickname</Text>
+                  <input
+                    ref={nickInputRef}
+                    defaultValue={currentNick ?? ''}
+                    placeholder="Enter a nickname..."
+                    onKeyDown={handleNickKeyDown}
+                    style={{
+                      background: color.Surface.Container,
+                      color: color.Surface.OnContainer,
+                      border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      fontSize: '14px',
+                      width: '100%',
+                      outline: 'none',
+                    }}
+                  />
+                  <Box gap="200">
+                    <MenuItem
+                      size="300"
+                      radii="300"
+                      variant="Success"
+                      fill="None"
+                      onClick={handleSaveNick}
+                    >
+                      <Text size="B300">Save</Text>
+                    </MenuItem>
+                    {currentNick && (
+                      <MenuItem
+                        size="300"
+                        radii="300"
+                        variant="Critical"
+                        fill="None"
+                        onClick={() => {
+                          setNickname(userId, undefined);
+                          close();
+                        }}
+                      >
+                        <Text size="B300">Clear</Text>
+                      </MenuItem>
+                    )}
+                  </Box>
+                </Box>
+              ) : (
+                <MenuItem
+                  variant="Surface"
+                  fill="None"
+                  size="300"
+                  radii="300"
+                  before={<Icon size="50" src={Icons.Pencil} />}
+                  onClick={() => setEditingNick(true)}
+                >
+                  <Text size="B300">{currentNick ? 'Edit Nickname' : 'Set Nickname'}</Text>
+                </MenuItem>
+              )}
               <MenuItem
                 variant="Critical"
                 fill="None"
