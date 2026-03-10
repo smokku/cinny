@@ -81,10 +81,11 @@ import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
-import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+import { AsyncStatus } from '../../../hooks/useAsyncCallback';
 import { BreakWord } from '../../../styles/Text.css';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
 import { useCallEmbed } from '../../../hooks/useCallEmbed';
+import { useRoomReplacement, useReplacementOpen } from '../../../hooks/useRoomReplacement';
 
 type SpaceMenuProps = {
   room: Room;
@@ -306,26 +307,15 @@ function SpaceHeader() {
   );
 }
 
-type SpaceTombstoneProps = { roomId: string; replacementRoomId: string };
+type SpaceTombstoneProps = { roomId: string; replacementRoomId?: string };
 export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProps) {
-  const mx = useMatrixClient();
   const { navigateSpace } = useRoomNavigate();
-
-  const [joinState, handleJoin] = useAsyncCallback(
-    useCallback(() => {
-      const currentRoom = mx.getRoom(roomId);
-      const via = currentRoom ? getViaServers(currentRoom) : [];
-      return mx.joinRoom(replacementRoomId, {
-        viaServers: via,
-      });
-    }, [mx, roomId, replacementRoomId])
+  const { validReplacementRoomId, replacementRoom, joinState, handleJoin } = useRoomReplacement(
+    roomId,
+    replacementRoomId
   );
-  const replacementRoom = mx.getRoom(replacementRoomId);
 
-  const handleOpen = () => {
-    if (replacementRoom) navigateSpace(replacementRoom.roomId);
-    if (joinState.status === AsyncStatus.Success) navigateSpace(joinState.data.roomId);
-  };
+  const handleOpen = useReplacementOpen(replacementRoom, joinState, navigateSpace);
 
   return (
     <Box
@@ -339,38 +329,44 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
       gap="300"
     >
       <Box direction="Column" grow="Yes" gap="100">
-        <Text size="L400">Space Upgraded</Text>
-        <Text size="T200">This space has been replaced and is no longer active.</Text>
+        <Text size="L400">{validReplacementRoomId ? 'Space Upgraded' : 'Space Closed'}</Text>
+        <Text size="T200">
+          {validReplacementRoomId
+            ? 'This space has been replaced and is no longer active.'
+            : 'This space has been closed and is no longer active.'}
+        </Text>
         {joinState.status === AsyncStatus.Error && (
           <Text className={BreakWord} style={{ color: color.Critical.Main }} size="T200">
             {(joinState.error as any)?.message ?? 'Failed to join replacement space!'}
           </Text>
         )}
       </Box>
-      <Box direction="Column" shrink="No">
-        {replacementRoom?.getMyMembership() === Membership.Join ||
-        joinState.status === AsyncStatus.Success ? (
-          <Button onClick={handleOpen} size="300" variant="Success" fill="Solid" radii="300">
-            <Text size="B300">Open New Space</Text>
-          </Button>
-        ) : (
-          <Button
-            onClick={handleJoin}
-            size="300"
-            variant="Primary"
-            fill="Solid"
-            radii="300"
-            before={
-              joinState.status === AsyncStatus.Loading && (
-                <Spinner size="100" variant="Primary" fill="Solid" />
-              )
-            }
-            disabled={joinState.status === AsyncStatus.Loading}
-          >
-            <Text size="B300">Join New Space</Text>
-          </Button>
-        )}
-      </Box>
+      {validReplacementRoomId && (
+        <Box direction="Column" shrink="No">
+          {replacementRoom?.getMyMembership() === Membership.Join ||
+          joinState.status === AsyncStatus.Success ? (
+            <Button onClick={handleOpen} size="300" variant="Success" fill="Solid" radii="300">
+              <Text size="B300">Open New Space</Text>
+            </Button>
+          ) : (
+            <Button
+              onClick={handleJoin}
+              size="300"
+              variant="Primary"
+              fill="Solid"
+              radii="300"
+              before={
+                joinState.status === AsyncStatus.Loading && (
+                  <Spinner size="100" variant="Primary" fill="Solid" />
+                )
+              }
+              disabled={joinState.status === AsyncStatus.Loading}
+            >
+              <Text size="B300">Join New Space</Text>
+            </Button>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }

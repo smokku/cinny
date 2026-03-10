@@ -36,7 +36,7 @@ import {
   useAdditionalCreators,
 } from '../../../components/create-room';
 import { useAlive } from '../../../hooks/useAlive';
-import { creatorsSupported } from '../../../utils/matrix';
+import { creatorsSupported, isRoomId } from '../../../utils/matrix';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { BreakWord } from '../../../styles/Text.css';
 
@@ -177,7 +177,9 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
     room,
     StateEvent.RoomTombstone
   )?.getContent<RoomTombstoneEventContent>();
-  const replacementRoom = tombstoneContent?.replacement_room;
+  const rawReplacementRoom = tombstoneContent?.replacement_room;
+  const replacementRoom =
+    rawReplacementRoom && isRoomId(rawReplacementRoom) ? rawReplacementRoom : undefined;
 
   const canUpgrade = permissions.stateEvent(StateEvent.RoomTombstone, mx.getSafeUserId());
 
@@ -216,7 +218,7 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
         title={room.isSpaceRoom() ? 'Upgrade Space' : 'Upgrade Room'}
         description={
           replacementRoom
-            ? tombstoneContent.body ||
+            ? tombstoneContent?.body ||
               `This ${room.isSpaceRoom() ? 'space' : 'room'} has been replaced!`
             : `Current version: ${roomVersion}.`
         }
