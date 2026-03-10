@@ -484,12 +484,12 @@ export function Lobby() {
                     <PageHeroSection
                       ref={heroSectionRef}
                       style={{
-                        paddingTop: bannerUrl ? undefined : 0,
+                        padding: bannerUrl ? 40 : 0,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         backgroundRepeat: 'no-repeat',
                         backgroundImage: bannerUrl
-                          ? `linear-gradient(to bottom, transparent, ${color.Surface.Container}), url(${bannerUrl})`
+                          ? `linear-gradient(to bottom, transparent, ${color.Surface.Container} 77%), url(${bannerUrl})`
                           : undefined,
                         maxWidth: bannerUrl ? 'unset' : undefined,
                         textShadow: bannerUrl
