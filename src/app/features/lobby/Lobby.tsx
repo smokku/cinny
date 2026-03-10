@@ -1,5 +1,17 @@
 import React, { MouseEventHandler, useCallback, useMemo, useRef, useState } from 'react';
-import { Box, Chip, Icon, IconButton, Icons, Line, Scroll, Spinner, Text, config } from 'folds';
+import {
+  Box,
+  Chip,
+  Icon,
+  IconButton,
+  Icons,
+  Line,
+  Scroll,
+  Spinner,
+  Text,
+  color,
+  config,
+} from 'folds';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import { useNavigate } from 'react-router-dom';
@@ -35,7 +47,7 @@ import { makeLobbyCategoryId } from '../../state/closedLobbyCategories';
 import { useCategoryHandler } from '../../hooks/useCategoryHandler';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { allRoomsAtom } from '../../state/room-list/roomList';
-import { getCanonicalAliasOrRoomId, rateLimitedActions } from '../../utils/matrix';
+import { getCanonicalAliasOrRoomId, mxcUrlToHttp, rateLimitedActions } from '../../utils/matrix';
 import { getSpaceRoomPath } from '../../pages/pathUtils';
 import { StateEvent } from '../../../types/matrix/room';
 import { CanDropCallback, useDnDMonitor } from './DnD';
@@ -56,6 +68,8 @@ import { useGetRoom } from '../../hooks/useGetRoom';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
+import { useRoomBanner } from '../../hooks/useRoomMeta';
+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 
 const useCanDropLobbyItem = (
   space: Room,
@@ -158,6 +172,12 @@ export function Lobby() {
   const spacePowerLevels = usePowerLevels(space);
   const lex = useMemo(() => new ASCIILexicalTable(' '.charCodeAt(0), '~'.charCodeAt(0), 6), []);
   const members = useRoomMembers(mx, space.roomId);
+
+  const useAuthentication = useMediaAuthentication();
+  const bannerMxc = useRoomBanner(space);
+  const bannerUrl = bannerMxc
+    ? mxcUrlToHttp(mx, bannerMxc, useAuthentication) ?? undefined
+    : undefined;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -461,7 +481,22 @@ export function Lobby() {
                       height: virtualizer.getTotalSize(),
                     }}
                   >
-                    <PageHeroSection ref={heroSectionRef} style={{ paddingTop: 0 }}>
+                    <PageHeroSection
+                      ref={heroSectionRef}
+                      style={{
+                        paddingTop: bannerUrl ? undefined : 0,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundImage: bannerUrl
+                          ? `linear-gradient(to bottom, transparent, ${color.Surface.Container}), url(${bannerUrl})`
+                          : undefined,
+                        maxWidth: bannerUrl ? 'unset' : undefined,
+                        textShadow: bannerUrl
+                          ? `1px 1px 0px ${color.Surface.Container}, -1px -1px 0px ${color.Surface.Container}, 1px -1px 0px ${color.Surface.Container}, -1px 1px 0px ${color.Surface.Container}`
+                          : undefined,
+                      }}
+                    >
                       <LobbyHero />
                     </PageHeroSection>
                     {vItems.map((vItem) => {

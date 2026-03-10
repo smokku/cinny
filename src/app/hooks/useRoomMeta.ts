@@ -16,6 +16,15 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
+export const useRoomBanner = (room: Room): string | undefined => {
+  const bannerEvent = useStateEvent(room, StateEvent.RoomBanner);
+
+  const content = bannerEvent?.getContent();
+  const bannerMxc = content && typeof content.url === 'string' ? content.url : undefined;
+
+  return bannerMxc;
+};
+
 export const useRoomName = (room: Room): string => {
   const [name, setName] = useState(room.name);
 
