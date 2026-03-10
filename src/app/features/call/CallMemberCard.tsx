@@ -1,6 +1,7 @@
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import React, { useState } from 'react';
 import { Avatar, Box, Icon, Icons, Text } from 'folds';
+import { useAtomValue } from 'jotai';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
@@ -11,6 +12,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { UserAvatar } from '../../components/user-avatar';
 import { getMouseEventCords } from '../../utils/dom';
 import * as css from './styles.css';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type CallMemberCardProps = {
   member: CallMembership;
@@ -19,13 +21,14 @@ export function CallMemberCard({ member }: CallMemberCardProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const room = useRoom();
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const openUserProfile = useOpenUserRoomProfile();
 
   const { userId } = member;
   if (!userId) return null;
 
-  const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+  const name = getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;
   const avatarMxc = getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxc
     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined

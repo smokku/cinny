@@ -1,5 +1,6 @@
 import React from 'react';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import {
   Avatar,
   Box,
@@ -24,6 +25,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getMouseEventCords } from '../../utils/dom';
+import { nicknamesAtom } from '../../state/nicknames';
 
 export type EventReadersProps = {
   room: Room;
@@ -37,9 +39,10 @@ export const EventReaders = as<'div', EventReadersProps>(
     const latestEventReaders = useRoomEventReaders(room, eventId);
     const openProfile = useOpenUserRoomProfile();
     const space = useSpaceOptionally();
+    const nicknames = useAtomValue(nicknamesAtom);
 
     const getName = (userId: string) =>
-      getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+      getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;
 
     return (
       <Box

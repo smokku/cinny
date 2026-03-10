@@ -359,7 +359,12 @@ export const parseReplyFormattedBody = (
   return `<mx-reply><blockquote>${replyToLink}${userLink}<br />${formattedBody}</blockquote></mx-reply>`;
 };
 
-export const getMemberDisplayName = (room: Room, userId: string): string | undefined => {
+export const getMemberDisplayName = (
+  room: Room,
+  userId: string,
+  nicknames?: Record<string, string>
+): string | undefined => {
+  if (nicknames?.[userId]) return nicknames[userId];
   const member = room.getMember(userId);
   const name = member?.rawDisplayName;
   if (name === userId) return undefined;

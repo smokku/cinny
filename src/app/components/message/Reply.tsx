@@ -2,6 +2,7 @@ import { Box, Icon, Icons, Text, as, color, toRem } from 'folds';
 import { EventTimelineSet, Room } from 'matrix-js-sdk';
 import React, { MouseEventHandler, ReactNode, useCallback, useMemo } from 'react';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import { getMemberDisplayName, trimReplyFromBody } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { LinePlaceholder } from './placeholder';
@@ -12,6 +13,7 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
 import { useRoomEvent } from '../../hooks/useRoomEvent';
 import colorMXID from '../../../util/colorMXID';
 import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type ReplyLayoutProps = {
   userColor?: string;
@@ -77,6 +79,7 @@ export const Reply = as<'div', ReplyProps>(
     },
     ref
   ) => {
+    const nicknames = useAtomValue(nicknamesAtom);
     const placeholderWidth = useMemo(() => randomNumberBetween(40, 400), []);
     const getFromLocalTimeline = useCallback(
       () => timelineSet?.findEventById(replyEventId),
@@ -111,7 +114,7 @@ export const Reply = as<'div', ReplyProps>(
           username={
             sender && (
               <Text size="T300" truncate>
-                <b>{getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender)}</b>
+                <b>{getMemberDisplayName(room, sender, nicknames) ?? getMxIdLocalPart(sender)}</b>
               </Text>
             )
           }
