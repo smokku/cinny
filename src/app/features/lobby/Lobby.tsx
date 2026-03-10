@@ -485,6 +485,9 @@ export function Lobby() {
                       ref={heroSectionRef}
                       style={{
                         padding: bannerUrl ? 40 : 0,
+                        borderTopLeftRadius: config.radii.R400,
+                        borderTopRightRadius: config.radii.R400,
+                        overflow: 'hidden',
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         backgroundRepeat: 'no-repeat',
