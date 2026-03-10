@@ -67,6 +67,7 @@ import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
 import { useReportRoomSupported } from '../../../hooks/useReportRoomSupported';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 const COMPACT_CARD_WIDTH = 548;
 
@@ -88,7 +89,12 @@ type InviteData = {
   isEncrypted: boolean;
 };
 
-const makeInviteData = (mx: MatrixClient, room: Room, useAuthentication: boolean): InviteData => {
+const makeInviteData = (
+  mx: MatrixClient,
+  room: Room,
+  useAuthentication: boolean,
+  nicknames: Record<string, string>
+): InviteData => {
   const userId = mx.getSafeUserId();
   const direct = isDirectInvite(room, userId);
 
@@ -107,7 +113,7 @@ const makeInviteData = (mx: MatrixClient, room: Room, useAuthentication: boolean
   const senderId = memberEvent?.getSender();
 
   const senderName = senderId
-    ? getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId
+    ? getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId
     : undefined;
   const inviteTs = memberEvent?.getTs();
   const reason =
@@ -697,13 +703,14 @@ export function Invites() {
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const allRooms = useAtomValue(allRoomsAtom);
   const allInviteIds = useAtomValue(allInvitesAtom);
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const [filter, setFilter] = useState(InviteFilter.Known);
 
   const invitesData = allInviteIds
     .map((inviteId) => mx.getRoom(inviteId))
     .filter((inviteRoom) => !!inviteRoom)
-    .map((inviteRoom) => makeInviteData(mx, inviteRoom, useAuthentication));
+    .map((inviteRoom) => makeInviteData(mx, inviteRoom, useAuthentication, nicknames));
 
   const [knownInvites, unknownInvites, spamInvites] = useMemo(() => {
     const known: InviteData[] = [];

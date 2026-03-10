@@ -18,6 +18,7 @@ import {
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import FocusTrap from 'focus-trap-react';
 import { Room } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
 import * as css from './styles.css';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
@@ -27,6 +28,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { UserAvatar } from '../../components/user-avatar';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../utils/dom';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type LiveChipProps = {
   room: Room;
@@ -37,6 +39,7 @@ export function LiveChip({ count, room, members }: LiveChipProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const openUserProfile = useOpenUserRoomProfile();
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const [cords, setCords] = useState<RectCords>();
 
@@ -74,7 +77,9 @@ export function LiveChip({ count, room, members }: LiveChipProps) {
                     const userId = callMember.sender;
                     if (!userId) return null;
                     const name =
-                      getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+                      getMemberDisplayName(room, userId, nicknames) ??
+                      getMxIdLocalPart(userId) ??
+                      userId;
                     const avatarMxc = getMemberAvatarMxc(room, userId);
                     const avatarUrl = avatarMxc
                       ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined

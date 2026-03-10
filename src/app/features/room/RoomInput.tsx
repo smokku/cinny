@@ -118,6 +118,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
+import { nicknamesAtom } from '../../state/nicknames';
 
 const getReplyContent = (replyDraft: IReplyDraft): IContent['m.relates_to'] => {
   const relation: Record<string, unknown> = {};
@@ -155,6 +156,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const draftKey = threadRootId ?? roomId;
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
+    const nicknames = useAtomValue(nicknamesAtom);
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -672,7 +674,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                       username={
                         <Text size="T300" truncate>
                           <b>
-                            {getMemberDisplayName(room, replyDraft.userId) ??
+                            {getMemberDisplayName(room, replyDraft.userId, nicknames) ??
                               getMxIdLocalPart(replyDraft.userId) ??
                               replyDraft.userId}
                           </b>

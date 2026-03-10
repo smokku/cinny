@@ -1,16 +1,19 @@
 import { Room } from 'matrix-js-sdk';
 import React from 'react';
 import { Box, Icon, Icons, Text } from 'folds';
+import { useAtomValue } from 'jotai';
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type MemberSpeakingProps = {
   room: Room;
   speakers: Set<string>;
 };
 export function MemberSpeaking({ room, speakers }: MemberSpeakingProps) {
+  const nicknames = useAtomValue(nicknamesAtom);
   const speakingNames = Array.from(speakers).map(
-    (userId) => getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId
+    (userId) => getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId
   );
   return (
     <Box alignItems="Center" gap="100">
