@@ -26,6 +26,7 @@ export enum StateEvent {
   RoomName = 'm.room.name',
   RoomTopic = 'm.room.topic',
   RoomAvatar = 'm.room.avatar',
+  RoomBanner = 'page.codeberg.everypizza.room.banner',
   RoomPinnedEvents = 'm.room.pinned_events',
   RoomEncryption = 'm.room.encryption',
   RoomHistoryVisibility = 'm.room.history_visibility',
