@@ -97,6 +97,7 @@ import {
 } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
+import { nicknamesAtom } from '../../../state/nicknames';
 
 type RoomNotificationsGroup = {
   roomId: string;
@@ -235,6 +236,7 @@ function RoomNotificationsGroupComp({
 
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
@@ -243,10 +245,16 @@ function RoomNotificationsGroupComp({
     () => ({
       ...LINKIFY_OPTS,
       render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+        renderMatrixMention(
+          mx,
+          room.roomId,
+          href,
+          makeMentionCustomProps(mentionClickHandler),
+          nicknames
+        )
       ),
     }),
-    [mx, room, mentionClickHandler]
+    [mx, room, mentionClickHandler, nicknames]
   );
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
@@ -255,8 +263,9 @@ function RoomNotificationsGroupComp({
         useAuthentication,
         handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
+        nicknames,
       }),
-    [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
+    [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication, nicknames]
   );
 
   const renderMatrixEvent = useMatrixEventRenderer<[IRoomEvent, string, GetContentCallback]>(
@@ -448,7 +457,7 @@ function RoomNotificationsGroupComp({
           const { event } = notification;
 
           const displayName =
-            getMemberDisplayName(room, event.sender) ??
+            getMemberDisplayName(room, event.sender, nicknames) ??
             getMxIdLocalPart(event.sender) ??
             event.sender;
           const senderAvatarMxc = getMemberAvatarMxc(room, event.sender);

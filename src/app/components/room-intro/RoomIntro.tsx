@@ -17,6 +17,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { InviteUserPrompt } from '../invite-user-prompt';
+import { nicknamesAtom } from '../../state/nicknames';
 
 export type RoomIntroProps = {
   room: Room;
@@ -27,6 +28,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
   const useAuthentication = useMediaAuthentication();
   const { navigateRoom } = useRoomNavigate();
   const mDirects = useAtomValue(mDirectAtom);
+  const nicknames = useAtomValue(nicknamesAtom);
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
@@ -39,7 +41,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
   const ts = createEvent?.getTs();
   const creatorId = createEvent?.getSender();
   const creatorName =
-    creatorId && (getMemberDisplayName(room, creatorId) ?? getMxIdLocalPart(creatorId));
+    creatorId && (getMemberDisplayName(room, creatorId, nicknames) ?? getMxIdLocalPart(creatorId));
   const prevRoomId = createContent?.predecessor?.room_id;
 
   const [prevRoomState, joinPrevRoom] = useAsyncCallback(

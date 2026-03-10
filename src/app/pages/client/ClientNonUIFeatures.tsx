@@ -26,6 +26,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { nicknamesAtom } from '../../state/nicknames';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -136,6 +137,7 @@ function MessageNotifications() {
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const navigate = useNavigate();
   const notificationSelected = useInboxNotificationsSelected();
@@ -220,7 +222,8 @@ function MessageNotifications() {
           roomAvatar: avatarMxc
             ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
             : undefined,
-          username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
+          username:
+            getMemberDisplayName(room, sender, nicknames) ?? getMxIdLocalPart(sender) ?? sender,
           roomId: room.roomId,
           eventId,
         });
@@ -243,6 +246,7 @@ function MessageNotifications() {
     notify,
     selectedRoomId,
     useAuthentication,
+    nicknames,
   ]);
 
   return (

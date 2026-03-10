@@ -14,6 +14,7 @@ import {
 import { Room } from 'matrix-js-sdk';
 import classNames from 'classnames';
 import FocusTrap from 'focus-trap-react';
+import { useAtomValue } from 'jotai';
 
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
@@ -23,6 +24,7 @@ import { useRoomLatestRenderedEvent } from '../../hooks/useRoomLatestRenderedEve
 import { useRoomEventReaders } from '../../hooks/useRoomEventReaders';
 import { EventReaders } from '../../components/event-readers';
 import { stopPropagation } from '../../utils/keyboard';
+import { nicknamesAtom } from '../../state/nicknames';
 
 export function RoomViewFollowingPlaceholder() {
   return <div className={css.RoomViewFollowingPlaceholder} />;
@@ -36,6 +38,7 @@ export type RoomViewFollowingProps = {
 export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
   ({ className, room, threadEventId, participantIds, ...props }, ref) => {
     const mx = useMatrixClient();
+    const nicknames = useAtomValue(nicknamesAtom);
     const [open, setOpen] = useState(false);
     const latestEvent = useRoomLatestRenderedEvent(room);
     const eventId = threadEventId ?? latestEvent?.getId();
@@ -44,7 +47,8 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
       .filter((readerId) => readerId !== mx.getUserId())
       .filter((readerId) => !participantIds || participantIds.has(readerId))
       .map(
-        (readerId) => getMemberDisplayName(room, readerId) ?? getMxIdLocalPart(readerId) ?? readerId
+        (readerId) =>
+          getMemberDisplayName(room, readerId, nicknames) ?? getMxIdLocalPart(readerId) ?? readerId
       );
 
     return (

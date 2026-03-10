@@ -1,5 +1,6 @@
 import { Scroll, Text } from 'folds';
 import React from 'react';
+import { useAtomValue } from 'jotai';
 import {
   RenderElementProps,
   RenderLeafProps,
@@ -15,6 +16,7 @@ import { getBeginCommand } from './utils';
 import { BlockType } from './types';
 import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { nicknamesAtom } from '../../state/nicknames';
 
 // Put this at the start and end of an inline component to work around this Chromium bug:
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1249405
@@ -33,6 +35,8 @@ function RenderMentionElement({
 }: { element: MentionElement } & RenderElementProps) {
   const selected = useSelected();
   const focused = useFocused();
+  const nicknames = useAtomValue(nicknamesAtom);
+  const displayName = nicknames[element.id] ? `@${nicknames[element.id]}` : element.name;
 
   return (
     <span
@@ -43,7 +47,7 @@ function RenderMentionElement({
       })}
       contentEditable={false}
     >
-      {element.name}
+      {displayName}
       {children}
     </span>
   );

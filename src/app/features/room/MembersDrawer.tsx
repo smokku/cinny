@@ -29,6 +29,7 @@ import {
 import { MatrixClient, Room, RoomMember } from 'matrix-js-sdk';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 
 import * as css from './MembersDrawer.css';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -59,6 +60,7 @@ import { useSpaceOptionally } from '../../hooks/useSpace';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type MemberDrawerHeaderProps = {
   room: Room;
@@ -119,8 +121,11 @@ function MemberItem({
   pressed,
   typing,
 }: MemberItemProps) {
+  const nicknames = useAtomValue(nicknamesAtom);
   const name =
-    getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+    getMemberDisplayName(room, member.userId, nicknames) ??
+    getMxIdLocalPart(member.userId) ??
+    member.userId;
   const avatarMxcUrl = member.getMxcAvatarUrl();
   const avatarUrl = avatarMxcUrl
     ? mx.mxcUrlToHttp(avatarMxcUrl, 100, 100, 'crop', undefined, false, useAuthentication)

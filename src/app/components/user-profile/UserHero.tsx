@@ -8,27 +8,53 @@ import {
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
+  Scroll,
   Text,
+  Tooltip,
+  toRem,
 } from 'folds';
 import classNames from 'classnames';
 import FocusTrap from 'focus-trap-react';
-import * as css from './styles.css';
-import { UserAvatar } from '../user-avatar';
 import colorMXID from '../../../util/colorMXID';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { BreakWord, LineClamp3 } from '../../styles/Text.css';
 import { UserPresence } from '../../hooks/useUserPresence';
-import { AvatarPresence, PresenceBadge } from '../presence';
-import { ImageViewer } from '../image-viewer';
 import { stopPropagation } from '../../utils/keyboard';
+import { useNickname } from '../../hooks/useNickname';
+import { useBlobCache } from '../../hooks/useBlobCache';
+import { ImageViewer } from '../image-viewer';
+import { AvatarPresence, PresenceBadge } from '../presence';
+import { UserAvatar } from '../user-avatar';
+import * as css from './styles.css';
 
 type UserHeroProps = {
   userId: string;
   avatarUrl?: string;
+  bannerUrl?: string;
   presence?: UserPresence;
 };
-export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
+
+export function UserHero({ userId, avatarUrl, bannerUrl, presence }: UserHeroProps) {
   const [viewAvatar, setViewAvatar] = useState<string>();
+  const [isFullStatus, setIsFullStatus] = useState(false);
+
+  const cachedBannerUrl = useBlobCache(bannerUrl);
+  const cachedAvatarUrl = useBlobCache(avatarUrl);
+
+  const coverUrl = cachedBannerUrl || cachedAvatarUrl;
+  const isFallbackCover = !cachedBannerUrl && !!cachedAvatarUrl;
+
+  const renderCoverImage = () => (
+    <img
+      className={classNames(css.UserHeroCover, isFallbackCover && css.UserHeroCoverFallback)}
+      src={coverUrl}
+      alt={`${userId} cover`}
+      draggable="false"
+    />
+  );
+
+  const status = presence?.status;
+  const isExpandable = (status?.length ?? 0) > 70;
 
   return (
     <Box direction="Column" className={css.UserHero}>
@@ -36,58 +62,104 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
         className={css.UserHeroCoverContainer}
         style={{
           backgroundColor: colorMXID(userId),
-          filter: avatarUrl ? undefined : 'brightness(50%)',
         }}
       >
-        {avatarUrl && (
-          <img className={css.UserHeroCover} src={avatarUrl} alt={userId} draggable="false" />
-        )}
+        {coverUrl && renderCoverImage()}
       </div>
-      <div className={css.UserHeroAvatarContainer}>
-        <AvatarPresence
-          className={css.UserAvatarContainer}
-          badge={
-            presence && <PresenceBadge presence={presence.presence} status={presence.status} />
-          }
-        >
-          <Avatar
-            as={avatarUrl ? 'button' : 'div'}
-            onClick={avatarUrl ? () => setViewAvatar(avatarUrl) : undefined}
-            className={css.UserHeroAvatar}
-            size="500"
+      <Box direction="Row" className={css.UserHeroAvatarStatusContainer}>
+        <div className={css.UserHeroAvatarContainer}>
+          <AvatarPresence
+            className={css.UserAvatarContainer}
+            badge={presence && <PresenceBadge presence={presence.presence} />}
           >
-            <UserAvatar
-              className={css.UserHeroAvatarImg}
-              userId={userId}
-              src={avatarUrl}
-              alt={userId}
-              renderFallback={() => <Icon size="500" src={Icons.User} filled />}
-            />
-          </Avatar>
-        </AvatarPresence>
-        {viewAvatar && (
-          <Overlay open backdrop={<OverlayBackdrop />}>
-            <OverlayCenter>
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  onDeactivate: () => setViewAvatar(undefined),
-                  clickOutsideDeactivates: true,
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                <Modal size="500" onContextMenu={(evt: any) => evt.stopPropagation()}>
-                  <ImageViewer
-                    src={viewAvatar}
-                    alt={userId}
-                    requestClose={() => setViewAvatar(undefined)}
-                  />
-                </Modal>
-              </FocusTrap>
-            </OverlayCenter>
-          </Overlay>
+            <Avatar
+              as={avatarUrl ? 'button' : 'div'}
+              onClick={avatarUrl ? () => setViewAvatar(avatarUrl) : undefined}
+              className={css.UserHeroAvatar}
+              size="500"
+            >
+              <UserAvatar
+                className={css.UserHeroAvatarImg}
+                userId={userId}
+                src={avatarUrl}
+                alt={userId}
+                renderFallback={() => <Icon size="500" src={Icons.User} filled />}
+              />
+            </Avatar>
+          </AvatarPresence>
+          {viewAvatar && (
+            <Overlay open backdrop={<OverlayBackdrop />}>
+              <OverlayCenter>
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    onDeactivate: () => setViewAvatar(undefined),
+                    clickOutsideDeactivates: true,
+                    escapeDeactivates: stopPropagation,
+                  }}
+                >
+                  <Modal size="500" onContextMenu={(evt: any) => evt.stopPropagation()}>
+                    <ImageViewer
+                      src={viewAvatar}
+                      alt={userId}
+                      requestClose={() => setViewAvatar(undefined)}
+                    />
+                  </Modal>
+                </FocusTrap>
+              </OverlayCenter>
+            </Overlay>
+          )}
+        </div>
+        {status && status.length > 0 && (
+          <div className={css.UserHeroStatusContainer}>
+            <Tooltip
+              onClick={isExpandable ? () => setIsFullStatus(!isFullStatus) : undefined}
+              className={css.UserHeroStatusTooltip}
+              style={{
+                maxHeight: isFullStatus ? toRem(105) : toRem(48),
+                cursor: isExpandable ? 'pointer' : 'default',
+                transform: 'none',
+                transition: 'none',
+                display: 'flex',
+              }}
+            >
+              <Box direction="Row" gap="100" style={{ height: '100%', width: '100%' }}>
+                {isFullStatus ? (
+                  <Scroll visibility="Hover" hideTrack style={{ height: '100%', flex: 1 }}>
+                    <Text size="T200" style={{ wordBreak: 'break-word' }}>
+                      {status}
+                    </Text>
+                  </Scroll>
+                ) : (
+                  <Text
+                    size="T200"
+                    style={{
+                      flex: 1,
+                      wordBreak: 'break-word',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {status}
+                  </Text>
+                )}
+
+                {isExpandable && (
+                  <Box
+                    shrink="No"
+                    alignItems="Center"
+                    justifyContent="Center"
+                    style={{ alignSelf: isFullStatus ? 'flex-start' : 'center' }}
+                  >
+                    <Icon size="50" src={isFullStatus ? Icons.ChevronTop : Icons.ChevronBottom} />
+                  </Box>
+                )}
+              </Box>
+            </Tooltip>
+          </div>
         )}
-      </div>
+      </Box>
     </Box>
   );
 }
@@ -96,19 +168,24 @@ type UserHeroNameProps = {
   displayName?: string;
   userId: string;
 };
+
 export function UserHeroName({ displayName, userId }: UserHeroNameProps) {
   const username = getMxIdLocalPart(userId);
+  const nick = useNickname(userId);
+
+  const shownName = nick ?? displayName ?? username ?? userId;
 
   return (
     <Box grow="Yes" direction="Column" gap="0">
       <Box alignItems="Baseline" gap="200" wrap="Wrap">
-        <Text
-          size="H4"
-          className={classNames(BreakWord, LineClamp3)}
-          title={displayName ?? username}
-        >
-          {displayName ?? username ?? userId}
+        <Text size="H4" className={classNames(BreakWord, LineClamp3)} title={shownName}>
+          {shownName}
         </Text>
+        {nick && (
+          <Text size="T200" priority="300" title={`Nickname (real: ${username})`}>
+            (nick)
+          </Text>
+        )}
       </Box>
       <Box alignItems="Center" gap="100" wrap="Wrap">
         <Text size="T200" className={classNames(BreakWord, LineClamp3)} title={username}>

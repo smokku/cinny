@@ -10,7 +10,7 @@ import { SpaceProvider } from '../hooks/useSpace';
 import { RoomProvider } from '../hooks/useRoom';
 
 function UserRoomProfileContextMenu({ state }: { state: UserRoomProfileState }) {
-  const { roomId, spaceId, userId, cords, position } = state;
+  const { roomId, spaceId, userId, cords, position, initialProfile } = state;
   const allJoinedRooms = useAllJoinedRoomsSet();
   const getRoom = useGetRoom(allJoinedRooms);
   const room = getRoom(roomId);
@@ -37,7 +37,7 @@ function UserRoomProfileContextMenu({ state }: { state: UserRoomProfileState }) 
           <Menu style={{ width: toRem(340) }}>
             <SpaceProvider value={space ?? null}>
               <RoomProvider value={room}>
-                <UserRoomProfile userId={userId} />
+                <UserRoomProfile userId={userId} initialProfile={initialProfile} />
               </RoomProvider>
             </SpaceProvider>
           </Menu>

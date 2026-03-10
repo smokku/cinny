@@ -4,6 +4,7 @@ import { IEventWithRoomId, JoinRule, RelationType, Room } from 'matrix-js-sdk';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
 import { Opts as LinkifyOpts } from 'linkifyjs';
+import { useAtomValue } from 'jotai';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import {
   factoryRenderLinkifyWithMention,
@@ -51,6 +52,7 @@ import {
 } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
+import { nicknamesAtom } from '../../state/nicknames';
 
 type SearchResultGroupProps = {
   room: Room;
@@ -87,6 +89,7 @@ export function SearchResultGroup({
 
   const theme = useTheme();
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
@@ -95,10 +98,16 @@ export function SearchResultGroup({
     () => ({
       ...LINKIFY_OPTS,
       render: factoryRenderLinkifyWithMention((href) =>
-        renderMatrixMention(mx, room.roomId, href, makeMentionCustomProps(mentionClickHandler))
+        renderMatrixMention(
+          mx,
+          room.roomId,
+          href,
+          makeMentionCustomProps(mentionClickHandler),
+          nicknames
+        )
       ),
     }),
-    [mx, room, mentionClickHandler]
+    [mx, room, mentionClickHandler, nicknames]
   );
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
@@ -108,6 +117,7 @@ export function SearchResultGroup({
         useAuthentication,
         handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
+        nicknames,
       }),
     [
       mx,
@@ -117,6 +127,7 @@ export function SearchResultGroup({
       mentionClickHandler,
       spoilerClickHandler,
       useAuthentication,
+      nicknames,
     ]
   );
 
@@ -222,7 +233,7 @@ export function SearchResultGroup({
           const { event } = item;
 
           const displayName =
-            getMemberDisplayName(room, event.sender) ??
+            getMemberDisplayName(room, event.sender, nicknames) ??
             getMxIdLocalPart(event.sender) ??
             event.sender;
           const senderAvatarMxc = getMemberAvatarMxc(room, event.sender);
