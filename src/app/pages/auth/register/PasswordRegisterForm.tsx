@@ -21,6 +21,7 @@ import {
   createClient,
 } from 'matrix-js-sdk';
 import { PasswordInput } from '../../../components/password-input';
+import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 import {
   getLoginTermUrl,
   getUIAFlowForStages,
@@ -97,6 +98,8 @@ function RegisterUIAFlow({
   registerEmail,
   onRegister,
 }: RegisterUIAFlowProps) {
+  const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
   const completed = useUIACompleted(authData);
   const { getStageToComplete } = useUIAFlow(authData, flow);
 
@@ -109,10 +112,10 @@ function RegisterUIAFlow({
         auth: authDict,
         password,
         username,
-        initial_device_display_name: 'Cinny Web',
+        initial_device_display_name: branding.deviceDisplayName,
       });
     },
-    [onRegister, formData]
+    [onRegister, formData, branding.deviceDisplayName]
   );
 
   const handleCancel = useCallback(() => {
@@ -184,6 +187,8 @@ export function PasswordRegisterForm({
   defaultEmail,
   defaultRegisterToken,
 }: PasswordRegisterFormProps) {
+  const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
   const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
@@ -250,7 +255,7 @@ export function PasswordRegisterForm({
       auth: {
         session: authData.session,
       },
-      initial_device_display_name: 'Cinny Web',
+      initial_device_display_name: branding.deviceDisplayName,
     });
   };
 

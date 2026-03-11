@@ -7,12 +7,15 @@ import { SettingTile } from '../../../components/setting-tile';
 import CinnySVG from '../../../../../public/res/svg/cinny.svg';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 
 type AboutProps = {
   requestClose: () => void;
 };
 export function About({ requestClose }: AboutProps) {
   const mx = useMatrixClient();
+  const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
 
   return (
     <Page>
@@ -46,7 +49,7 @@ export function About({ requestClose }: AboutProps) {
                   <Box direction="Column" gap="100">
                     <Box gap="100" alignItems="End">
                       <Text size="H3">Cinny</Text>
-                      <Text size="T200">v4.12.6</Text>
+                      {branding.version && <Text size="T200">v{branding.version}</Text>}
                     </Box>
                     <Text>Yet another matrix client.</Text>
                   </Box>
@@ -54,7 +57,7 @@ export function About({ requestClose }: AboutProps) {
                   <Box gap="200" wrap="Wrap">
                     <Button
                       as="a"
-                      href="https://github.com/cinnyapp/cinny"
+                      href={branding.sourceUrl}
                       rel="noreferrer noopener"
                       target="_blank"
                       variant="Secondary"
