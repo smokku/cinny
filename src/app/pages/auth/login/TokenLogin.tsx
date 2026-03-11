@@ -15,6 +15,7 @@ import { MatrixError } from 'matrix-js-sdk';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { CustomLoginResponse, LoginError, login, useLoginComplete } from './loginUtil';
+import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 
 function LoginTokenError({ message }: { message: string }) {
   return (
@@ -46,6 +47,8 @@ type TokenLoginProps = {
 export function TokenLogin({ token }: TokenLoginProps) {
   const discovery = useAutoDiscoveryInfo();
   const baseUrl = discovery['m.homeserver'].base_url;
+  const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
 
   const [loginState, startLogin] = useAsyncCallback<
     CustomLoginResponse,
@@ -57,9 +60,9 @@ export function TokenLogin({ token }: TokenLoginProps) {
     startLogin(baseUrl, {
       type: 'm.login.token',
       token,
-      initial_device_display_name: 'Cinny Web',
+      initial_device_display_name: branding.deviceDisplayName,
     });
-  }, [baseUrl, token, startLogin]);
+  }, [baseUrl, token, startLogin, branding.deviceDisplayName]);
 
   useLoginComplete(loginState.status === AsyncStatus.Success ? loginState.data : undefined);
 

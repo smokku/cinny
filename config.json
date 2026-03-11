@@ -27,5 +27,13 @@
   "hashRouter": {
     "enabled": false,
     "basename": "/"
+  },
+
+  "branding": {
+    "enabled": false,
+    "name": "Cinny",
+    "version": "4.10.5",
+    "logo": "/public/res/svg/cinny.svg",
+    "sourceUrl": "https://github.com/cinnyapp/cinny"
   }
 }

@@ -25,7 +25,7 @@ import { EMAIL_REGEX } from '../../../utils/regex';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAuthServer } from '../../../hooks/useAuthServer';
-import { useClientConfig } from '../../../hooks/useClientConfig';
+import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 import {
   CustomLoginResponse,
   LoginError,
@@ -113,6 +113,7 @@ type PasswordLoginFormProps = {
 export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLoginFormProps) {
   const server = useAuthServer();
   const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
 
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
@@ -133,7 +134,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         user: username,
       },
       password,
-      initial_device_display_name: 'Cinny Web',
+      initial_device_display_name: branding.deviceDisplayName,
     });
   };
 
@@ -151,7 +152,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         user: mxIdUsername,
       },
       password,
-      initial_device_display_name: 'Cinny Web',
+      initial_device_display_name: branding.deviceDisplayName,
     });
   };
   const handleEmailLogin = (email: string, password: string) => {
@@ -163,7 +164,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         address: email,
       },
       password,
-      initial_device_display_name: 'Cinny Web',
+      initial_device_display_name: branding.deviceDisplayName,
     });
   };
 

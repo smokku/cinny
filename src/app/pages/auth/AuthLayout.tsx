@@ -15,12 +15,12 @@ import * as css from './styles.css';
 import * as PatternsCss from '../../styles/Patterns.css';
 import {
   clientAllowedServer,
+  clientBranding,
   clientDefaultServer,
   useClientConfig,
 } from '../../hooks/useClientConfig';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { LOGIN_PATH, REGISTER_PATH, RESET_PASSWORD_PATH } from '../paths';
-import CinnySVG from '../../../../public/res/svg/cinny.svg';
 import { ServerPicker } from './ServerPicker';
 import { AutoDiscoveryAction, autoDiscovery } from '../../cs-api';
 import { SpecVersionsLoader } from '../../components/SpecVersionsLoader';
@@ -71,6 +71,7 @@ export function AuthLayout() {
   const { server: urlEncodedServer } = useParams();
 
   const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
 
   const defaultServer = clientDefaultServer(clientConfig);
   let server: string = urlEncodedServer ? tryDecodeURIComponent(urlEncodedServer) : defaultServer;
@@ -134,8 +135,8 @@ export function AuthLayout() {
         <Box direction="Column" className={css.AuthCard}>
           <Header className={css.AuthHeader} size="600" variant="Surface">
             <Box grow="Yes" direction="Row" gap="300" alignItems="Center">
-              <img className={css.AuthLogo} src={CinnySVG} alt="Cinny Logo" />
-              <Text size="H3">Cinny</Text>
+              <img className={css.AuthLogo} src={branding.logo} alt="App Logo" />
+              <Text size="H3">{branding.name}</Text>
             </Box>
           </Header>
           <Box className={css.AuthCardContent} direction="Column">
