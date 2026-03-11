@@ -61,6 +61,8 @@ import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { nicknamesAtom } from '../../state/nicknames';
+import { AvatarPresence, PresenceBadge } from '../../components/presence';
+import { useUserPresence } from '../../hooks/useUserPresence';
 
 type MemberDrawerHeaderProps = {
   room: Room;
@@ -126,6 +128,8 @@ function MemberItem({
     getMemberDisplayName(room, member.userId, nicknames) ??
     getMxIdLocalPart(member.userId) ??
     member.userId;
+  const presence = useUserPresence(member.userId);
+  const availablePresence = presence && presence.lastActiveTs !== 0 ? presence : undefined;
   const avatarMxcUrl = member.getMxcAvatarUrl();
   const avatarUrl = avatarMxcUrl
     ? mx.mxcUrlToHttp(avatarMxcUrl, 100, 100, 'crop', undefined, false, useAuthentication)
@@ -140,14 +144,20 @@ function MemberItem({
       radii="400"
       onClick={onClick}
       before={
-        <Avatar size="200">
-          <UserAvatar
-            userId={member.userId}
-            src={avatarUrl ?? undefined}
-            alt={name}
-            renderFallback={() => <Icon size="50" src={Icons.User} filled />}
-          />
-        </Avatar>
+        <AvatarPresence
+          badge={
+            availablePresence && <PresenceBadge presence={availablePresence.presence} size="200" />
+          }
+        >
+          <Avatar size="200">
+            <UserAvatar
+              userId={member.userId}
+              src={avatarUrl ?? undefined}
+              alt={name}
+              renderFallback={() => <Icon size="50" src={Icons.User} filled />}
+            />
+          </Avatar>
+        </AvatarPresence>
       }
       after={
         typing && (
@@ -157,10 +167,15 @@ function MemberItem({
         )
       }
     >
-      <Box grow="Yes">
+      <Box direction="Column" grow="Yes" gap="0">
         <Text size="T400" truncate>
           {name}
         </Text>
+        {presence?.status && presence.status.length > 0 && (
+          <Text size="T200" truncate style={{ opacity: config.opacity.P300 }}>
+            {presence.status}
+          </Text>
+        )}
       </Box>
     </MenuItem>
   );
