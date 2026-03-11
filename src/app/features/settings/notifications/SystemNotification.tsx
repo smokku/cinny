@@ -8,11 +8,14 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { getNotificationState, usePermissionState } from '../../../hooks/usePermission';
 import { useEmailNotifications } from '../../../hooks/useEmailNotifications';
+import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 
 function EmailNotification() {
   const mx = useMatrixClient();
+  const clientConfig = useClientConfig();
+  const branding = clientBranding(clientConfig);
   const [result, refreshResult] = useEmailNotifications();
 
   const [setState, setEnable] = useAsyncCallback(
@@ -27,7 +30,7 @@ function EmailNotification() {
             device_display_name: email,
             lang: 'en',
             data: {
-              brand: 'Cinny',
+              brand: branding.name,
             },
             append: true,
           });
@@ -39,7 +42,7 @@ function EmailNotification() {
           kind: null,
         } as unknown as IPusherRequest);
       },
-      [mx]
+      [mx, branding.name]
     )
   );
 
