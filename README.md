@@ -18,6 +18,7 @@ Live version of this code is running at <https://matrix.chrome.pl/>
 - Presence display in the members drawer.
 - Room banners in the Lobby.
 - User menu access on join and part messages.
+- Autoplay Avatars setting.
 
 ## Changed
 
