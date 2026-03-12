@@ -46,7 +46,8 @@ import { createUploadAtom, UploadSuccess } from '../../../state/upload';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
 import { useCapabilities } from '../../../hooks/useCapabilities';
 import { profilesCacheAtom } from '../../../state/userRoomProfile';
-import { useUserPresence } from '../../../hooks/useUserPresence';
+import { useUserPresence, Presence } from '../../../hooks/useUserPresence';
+import { setUserPresence } from '../../../utils/presence';
 import { PronounEditor } from './PronounEditor';
 import { PronounSet } from '../../../utils/pronouns';
 import { StatusEditor } from './StatusEditor';
@@ -502,13 +503,8 @@ function ProfileExtended({ profile, userId, onSaveField, disableExtended }: Prof
 
   const handleSaveStatus = useCallback(
     async (newStatus: string) => {
-      const currentState = presence?.presence || 'online';
-      await (
-        mx as { setPresence?: (state: { presence: string; status_msg?: string }) => Promise<void> }
-      ).setPresence?.({
-        presence: currentState,
-        status_msg: newStatus,
-      });
+      const currentState = presence?.presence ?? Presence.Online;
+      await setUserPresence(mx, currentState, newStatus);
     },
     [mx, presence]
   );

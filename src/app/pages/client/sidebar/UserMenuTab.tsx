@@ -35,14 +35,11 @@ import { useUserProfile } from '../../../hooks/useUserProfile';
 import { Modal500 } from '../../../components/Modal500';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useUserPresence, Presence } from '../../../hooks/useUserPresence';
+import { setUserPresence } from '../../../utils/presence';
 import { UserHero, UserHeroName } from '../../../components/user-profile/UserHero';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { PresenceBadge } from '../../../components/presence';
-
-type PresenceClient = {
-  setPresence?: (state: { presence: string; status_msg?: string }) => Promise<void>;
-};
 
 const PresenceOptions: Array<{ value: Presence; label: string }> = [
   { value: Presence.Online, label: 'Online' },
@@ -113,15 +110,6 @@ export function UserMenuTab() {
     setSettingsOpen(true);
   };
 
-  const setPresence = async (presenceValue: Presence, statusMsg: string) => {
-    const pClient = mx as PresenceClient;
-    if (!pClient.setPresence) return;
-    await pClient.setPresence({
-      presence: presenceValue,
-      status_msg: statusMsg,
-    });
-  };
-
   const handleStatusChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     setStatusValue(evt.currentTarget.value);
   };
@@ -139,7 +127,7 @@ export function UserMenuTab() {
       status: statusValue,
     });
     try {
-      await setPresence(currentPresence, statusValue);
+      await setUserPresence(mx, currentPresence, statusValue);
     } catch {
       setSubmittedState(null);
       setSavingStatus(false);
@@ -154,7 +142,7 @@ export function UserMenuTab() {
       status: currentStatus,
     });
     try {
-      await setPresence(presenceValue, currentStatus);
+      await setUserPresence(mx, presenceValue, currentStatus);
     } catch {
       setSubmittedState(null);
       setSavingStatus(false);
