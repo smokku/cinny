@@ -897,6 +897,7 @@ function Messages() {
   const [encUrlPreview, setEncUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');
   const [showHiddenEvents, setShowHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
   const [autoplayGifs, setAutoplayGifs] = useSetting(settingsAtom, 'autoplayGifs');
+  const [autoplayAvatars, setAutoplayAvatars] = useSetting(settingsAtom, 'autoplayAvatars');
   const [autoplayStickers, setAutoplayStickers] = useSetting(settingsAtom, 'autoplayStickers');
   const [autoplayEmojis, setAutoplayEmojis] = useSetting(settingsAtom, 'autoplayEmojis');
   const [showPronouns, setShowPronouns] = useSetting(settingsAtom, 'showPronouns');
@@ -962,6 +963,12 @@ function Messages() {
         <SettingTile
           title="Autoplay GIFs"
           after={<Switch variant="Primary" value={autoplayGifs} onChange={setAutoplayGifs} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Autoplay Avatars"
+          after={<Switch variant="Primary" value={autoplayAvatars} onChange={setAutoplayAvatars} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

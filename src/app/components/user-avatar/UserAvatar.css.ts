@@ -12,3 +12,8 @@ export const UserAvatar = style({
     },
   },
 });
+
+export const UserAvatarFreeze = style({
+  width: '100%',
+  height: '100%',
+});

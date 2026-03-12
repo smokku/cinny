@@ -34,6 +34,7 @@ export interface Settings {
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
   autoplayGifs: boolean;
+  autoplayAvatars: boolean;
   autoplayStickers: boolean;
   autoplayEmojis: boolean;
   showPronouns: boolean;
@@ -72,6 +73,7 @@ const defaultSettings: Settings = {
   showHiddenEvents: false,
   legacyUsernameColor: false,
   autoplayGifs: true,
+  autoplayAvatars: true,
   autoplayStickers: true,
   autoplayEmojis: true,
   showPronouns: true,

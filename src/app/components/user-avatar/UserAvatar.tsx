@@ -3,6 +3,9 @@ import React, { ReactEventHandler, ReactNode, useState } from 'react';
 import classNames from 'classnames';
 import * as css from './UserAvatar.css';
 import colorMXID from '../../../util/colorMXID';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
+import { ClientSideHoverFreeze } from '../ClientSideHoverFreeze';
 
 type UserAvatarProps = {
   className?: string;
@@ -13,6 +16,7 @@ type UserAvatarProps = {
 };
 export function UserAvatar({ className, userId, src, alt, renderFallback }: UserAvatarProps) {
   const [error, setError] = useState(false);
+  const [autoplayAvatars] = useSetting(settingsAtom, 'autoplayAvatars');
 
   const handleLoad: ReactEventHandler<HTMLImageElement> = (evt) => {
     evt.currentTarget.setAttribute('data-image-loaded', 'true');
@@ -29,7 +33,7 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
     );
   }
 
-  return (
+  const avatarImage = (
     <AvatarImage
       className={classNames(css.UserAvatar, className)}
       src={src}
@@ -38,5 +42,15 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
       onLoad={handleLoad}
       draggable={false}
     />
+  );
+
+  if (autoplayAvatars) {
+    return avatarImage;
+  }
+
+  return (
+    <ClientSideHoverFreeze src={src} className={css.UserAvatarFreeze} cursor="inherit">
+      {avatarImage}
+    </ClientSideHoverFreeze>
   );
 }
