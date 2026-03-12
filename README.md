@@ -1,4 +1,43 @@
-# Cinny
+# Chromed Cinny
+
+This is not meant to be a full fork of Cinny, but rather a personal build
+with features I like gathered from pending Cinny PRs, backported Sable features,
+and some of my own development.
+
+If you like it, feel free to use it. If not, that's fine too.
+If you want to contribute, just open a PR.
+
+Live version of this code is running at <https://matrix.chrome.pl/>
+
+## Added
+
+- Branding support via config.json.
+- Message Bookmarks with add, remove, and list functionality.
+- Sender and mention filters for message search.
+- Extended user profiles, banners, nicknames, and extended presence handling.
+- Presence display in the members drawer.
+- Room banners in the Lobby.
+- User menu access on join and part messages.
+
+## Changed
+
+- Replaced the sidebar Settings button with a user menu.
+- Discord-like message-reply layout and hover behavior.
+  - Move the message context outside of message content.
+
+## Fixed
+
+- Prevented small image attachments from being upscaled unnecessarily.
+- Improved room replacement logic and validation.
+- Media config fetching uses the authenticated endpoint when supported.
+- Icons in the hierarchy item menu.
+- Fixed PageZoomInput text wrapping.
+- Changed the emoji and sticker pack selector to a dropdown.
+
+Back to regular programming…
+
+---
+
 <p>
     <a href="https://github.com/ajbura/cinny/releases">
         <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/ajbura/cinny/total?logo=github&style=social"></a>
