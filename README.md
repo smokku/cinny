@@ -15,9 +15,10 @@ Live version of this code is running at <https://matrix.chrome.pl/>
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
 - Extended user profiles, banners, nicknames, and extended presence handling.
+- Set user presence using User Menu.
 - Presence display in the members drawer.
 - Room banners in the Lobby.
-- User menu access on join and part messages.
+- User Profile access on join and part messages.
 - Autoplay Avatars setting.
 
 ## Changed
