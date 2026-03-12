@@ -29,7 +29,7 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
     );
   }
 
-  return (
+  const avatarImage = (
     <AvatarImage
       className={classNames(css.UserAvatar, className)}
       src={src}
@@ -38,5 +38,15 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
       onLoad={handleLoad}
       draggable={false}
     />
+  );
+
+  if (autoplayAvatars) {
+    return avatarImage;
+  }
+
+  return (
+    <ClientSideHoverFreeze src={src} className={css.UserAvatarFreeze} cursor="inherit">
+      {avatarImage}
+    </ClientSideHoverFreeze>
   );
 }
