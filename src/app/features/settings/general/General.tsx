@@ -896,9 +896,6 @@ function Messages() {
   const [urlPreview, setUrlPreview] = useSetting(settingsAtom, 'urlPreview');
   const [encUrlPreview, setEncUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');
   const [showHiddenEvents, setShowHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
-  const [autoplayGifs, setAutoplayGifs] = useSetting(settingsAtom, 'autoplayGifs');
-  const [autoplayStickers, setAutoplayStickers] = useSetting(settingsAtom, 'autoplayStickers');
-  const [autoplayEmojis, setAutoplayEmojis] = useSetting(settingsAtom, 'autoplayEmojis');
   const [showPronouns, setShowPronouns] = useSetting(settingsAtom, 'showPronouns');
 
   return (
@@ -956,26 +953,6 @@ function Messages() {
               onChange={(v) => setMediaAutoLoad(!v)}
             />
           }
-        />
-      </SequenceCard>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Autoplay GIFs"
-          after={<Switch variant="Primary" value={autoplayGifs} onChange={setAutoplayGifs} />}
-        />
-      </SequenceCard>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Autoplay Stickers"
-          after={
-            <Switch variant="Primary" value={autoplayStickers} onChange={setAutoplayStickers} />
-          }
-        />
-      </SequenceCard>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Autoplay Emojis"
-          after={<Switch variant="Primary" value={autoplayEmojis} onChange={setAutoplayEmojis} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
