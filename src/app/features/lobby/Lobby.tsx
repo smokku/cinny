@@ -347,7 +347,7 @@ export function Lobby() {
 
         const itemSpaces = Array.from(
           hierarchy?.find((i) => i.space.roomId === containerParentId)?.rooms ?? []
-        );
+        ).filter((i) => i.roomId !== item.roomId);
 
         const beforeItem: HierarchyItem | undefined =
           'space' in containerItem ? undefined : containerItem;
