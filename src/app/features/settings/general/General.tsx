@@ -32,7 +32,13 @@ import FocusTrap from 'focus-trap-react';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
-import { DateFormat, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+import {
+  DateFormat,
+  MessageLayout,
+  MessageSpacing,
+  UrlPreviewSize,
+  settingsAtom,
+} from '../../../state/settings';
 import { SettingTile } from '../../../components/setting-tile';
 import { KeySymbol } from '../../../utils/key-symbol';
 import { isMacOS } from '../../../utils/user-agent';
@@ -888,6 +894,80 @@ function SelectMessageSpacing() {
   );
 }
 
+const urlPreviewSizeItems: { size: UrlPreviewSize; name: string }[] = [
+  { size: UrlPreviewSize.Compact, name: 'Compact' },
+  { size: UrlPreviewSize.Large, name: 'Large' },
+  { size: UrlPreviewSize.Cover, name: 'Cover' },
+];
+
+function SelectUrlPreviewSize() {
+  const [menuCords, setMenuCords] = useState<RectCords>();
+  const [urlPreviewSize, setUrlPreviewSize] = useSetting(settingsAtom, 'urlPreviewSize');
+
+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setMenuCords(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const handleSelect = (size: UrlPreviewSize) => {
+    setUrlPreviewSize(size);
+    setMenuCords(undefined);
+  };
+
+  return (
+    <>
+      <Button
+        size="300"
+        variant="Secondary"
+        outlined
+        fill="Soft"
+        radii="300"
+        after={<Icon size="300" src={Icons.ChevronBottom} />}
+        onClick={handleMenu}
+      >
+        <Text size="T300">
+          {urlPreviewSizeItems.find((i) => i.size === urlPreviewSize)?.name ?? urlPreviewSize}
+        </Text>
+      </Button>
+      <PopOut
+        anchor={menuCords}
+        offset={5}
+        position="Bottom"
+        align="End"
+        content={
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              onDeactivate: () => setMenuCords(undefined),
+              clickOutsideDeactivates: true,
+              isKeyForward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
+              isKeyBackward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
+              escapeDeactivates: stopPropagation,
+            }}
+          >
+            <Menu>
+              <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+                {urlPreviewSizeItems.map((item) => (
+                  <MenuItem
+                    key={item.size}
+                    size="300"
+                    variant={urlPreviewSize === item.size ? 'Primary' : 'Surface'}
+                    radii="300"
+                    onClick={() => handleSelect(item.size)}
+                  >
+                    <Text size="T300">{item.name}</Text>
+                  </MenuItem>
+                ))}
+              </Box>
+            </Menu>
+          </FocusTrap>
+        }
+      />
+    </>
+  );
+}
+
 function Messages() {
   const [legacyUsernameColor, setLegacyUsernameColor] = useSetting(
     settingsAtom,
@@ -1011,6 +1091,9 @@ function Messages() {
           title="Url Preview in Encrypted Room"
           after={<Switch variant="Primary" value={encUrlPreview} onChange={setEncUrlPreview} />}
         />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile title="Url Preview Size" after={<SelectUrlPreviewSize />} />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
