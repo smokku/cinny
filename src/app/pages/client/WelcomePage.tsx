@@ -6,7 +6,7 @@ import { clientBranding, useClientConfig } from '../../hooks/useClientConfig';
 export function WelcomePage() {
   const clientConfig = useClientConfig();
   const branding = clientBranding(clientConfig);
-  const isCustomBranding = !!clientConfig.branding && clientConfig.branding.enabled;
+  const isCustomBranding = !!clientConfig.branding && clientConfig.branding.enabled !== false;
 
   return (
     <Page>
