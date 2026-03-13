@@ -306,6 +306,7 @@ function PageZoomInput() {
 function Appearance() {
   const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
+  const [darkSidebar, setDarkSidebar] = useSetting(settingsAtom, 'darkSidebar');
   const [twitterEmoji, setTwitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
 
   return (
@@ -337,6 +338,14 @@ function Appearance() {
         <SettingTile
           title="Monochrome Mode"
           after={<Switch variant="Primary" value={monochromeMode} onChange={setMonochromeMode} />}
+        />
+      </SequenceCard>
+
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Dark Sidebar"
+          description="Always use a dark background for the navigation sidebar."
+          after={<Switch variant="Primary" value={darkSidebar} onChange={setDarkSidebar} />}
         />
       </SequenceCard>
 
