@@ -22,6 +22,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - User Profile access on join and part messages.
 - Autoplay Avatars setting.
 - Discord-like Dark Sidebar appearance toggle.
+- Change password section in settings.
 
 ## Changed
 
