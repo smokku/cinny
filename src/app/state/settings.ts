@@ -15,6 +15,12 @@ export enum MessageLayout {
   Bubble = 2,
 }
 
+export enum UrlPreviewSize {
+  Compact = 0,
+  Large = 1,
+  Cover = 2,
+}
+
 export interface Settings {
   themeId?: string;
   useSystemTheme: boolean;
@@ -38,6 +44,7 @@ export interface Settings {
   mediaAutoLoad: boolean;
   urlPreview: boolean;
   encUrlPreview: boolean;
+  urlPreviewSize: UrlPreviewSize;
   showHiddenEvents: boolean;
   legacyUsernameColor: boolean;
   showPronouns: boolean;
@@ -74,6 +81,7 @@ const defaultSettings: Settings = {
   mediaAutoLoad: true,
   urlPreview: true,
   encUrlPreview: false,
+  urlPreviewSize: UrlPreviewSize.Compact,
   showHiddenEvents: false,
   legacyUsernameColor: false,
   showPronouns: true,
