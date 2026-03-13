@@ -4,6 +4,9 @@ import { Box, Icon, IconButton, Icons, Scroll, Spinner, Text, as, color, config 
 import { ImageOverlay } from '../ImageOverlay';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useSetting } from '../../state/hooks/settings';
+import { UrlPreviewSize, settingsAtom } from '../../state/settings';
+
 import { UrlPreview, UrlPreviewContent, UrlPreviewDescription, UrlPreviewImg } from './UrlPreview';
 import {
   getIntersectionObserverEntry,
@@ -23,10 +26,10 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [viewer, setViewer] = useState(false);
+    const [urlPreviewSize] = useSetting(settingsAtom, 'urlPreviewSize');
     const [previewStatus, loadPreview] = useAsyncCallback(
       useCallback(() => mx.getUrlPreview(url, ts), [url, ts, mx])
     );
-
     useEffect(() => {
       loadPreview();
     }, [loadPreview]);
@@ -45,11 +48,14 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
       );
 
       const imgUrl = mxcUrlToHttp(mx, prev['og:image'] || '', useAuthentication);
+      const isBig = urlPreviewSize !== UrlPreviewSize.Compact;
+      const direction = isBig ? 'Column' : 'Row';
 
       return (
-        <>
+        <Box direction={direction} grow="Yes" style={{ height: '100%' }}>
           {thumbUrl && (
             <UrlPreviewImg
+              urlPreviewSize={urlPreviewSize}
               src={thumbUrl}
               alt={prev['og:title']}
               title={prev['og:title']}
@@ -69,7 +75,7 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
               renderViewer={(p) => <ImageViewer {...p} />}
             />
           )}
-          <UrlPreviewContent>
+          <UrlPreviewContent gap={isBig ? '0' : undefined}>
             <Text
               style={linkStyles}
               truncate
@@ -90,7 +96,7 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
               <UrlPreviewDescription>{prev['og:description']}</UrlPreviewDescription>
             </Text>
           </UrlPreviewContent>
-        </>
+        </Box>
       );
     };
 
