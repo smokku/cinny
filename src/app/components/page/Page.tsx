@@ -4,6 +4,10 @@ import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import * as css from './style.css';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+import { darkTheme } from '../../../colors.css';
+import { onDarkFontWeight } from '../../../config.css';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 
 type PageRootProps = {
   nav: ReactNode;
@@ -30,11 +34,15 @@ type ClientDrawerLayoutProps = {
 export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNavVariants) {
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
+  const [darkSidebar] = useSetting(settingsAtom, 'darkSidebar');
 
   return (
     <Box
       grow={isMobile ? 'Yes' : undefined}
-      className={css.PageNav({ size })}
+      className={classNames(
+        css.PageNav({ size }),
+        darkSidebar && [ContainerColor({ variant: 'Background' }), darkTheme, onDarkFontWeight]
+      )}
       shrink={isMobile ? 'Yes' : 'No'}
     >
       <Box grow="Yes" direction="Column">
