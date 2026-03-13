@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import classNames from 'classnames';
 import { Scroll } from 'folds';
 
 import {
@@ -18,12 +19,17 @@ import {
   SearchTab,
 } from './sidebar';
 import { CreateTab } from './sidebar/CreateTab';
+import { darkTheme } from '../../../colors.css';
+import { onDarkFontWeight } from '../../../config.css';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 
 export function SidebarNav() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [darkSidebar] = useSetting(settingsAtom, 'darkSidebar');
 
   return (
-    <Sidebar>
+    <Sidebar className={darkSidebar ? classNames(darkTheme, onDarkFontWeight) : undefined}>
       <SidebarContent
         scrollable={
           <Scroll ref={scrollRef} variant="Background" size="0">
