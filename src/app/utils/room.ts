@@ -231,7 +231,7 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
     if (event.getId() === readUpToId) return false;
     if (isNotificationEvent(event)) return true;
   }
-  return true;
+  return false;
 };
 
 export const getUnreadInfo = (room: Room): UnreadInfo => {
@@ -248,9 +248,14 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
     if (room.getMyMembership() !== 'join') return unread;
-    if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
+    const notificationType = getNotificationType(mx, room.roomId);
+    if (notificationType === NotificationType.Mute) return unread;
 
-    if (roomHaveNotification(room) || roomHaveUnread(mx, room)) {
+    const hasUnread =
+      notificationType === NotificationType.MentionsAndKeywords
+        ? roomHaveNotification(room)
+        : roomHaveNotification(room) || roomHaveUnread(mx, room);
+    if (hasUnread) {
       unread.push(getUnreadInfo(room));
     }
 

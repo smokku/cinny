@@ -79,7 +79,7 @@ const deleteUnreadInfo = (roomToUnread: RoomToUnread, allParents: Set<string>, r
   allParents.forEach((parentId) => {
     const oldParentUnread = roomToUnread.get(parentId);
     if (!oldParentUnread) return;
-    const newFrom = new Set([...(oldParentUnread.from ?? roomId)]);
+    const newFrom = new Set([...(oldParentUnread.from ?? [roomId])]);
     newFrom.delete(roomId);
     if (newFrom.size === 0) {
       roomToUnread.delete(parentId);
@@ -204,7 +204,8 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       data: IRoomTimelineData
     ) => {
       if (!room || !data.liveEvent || room.isSpaceRoom() || !isNotificationEvent(mEvent)) return;
-      if (getNotificationType(mx, room.roomId) === NotificationType.Mute) {
+      const notificationType = getNotificationType(mx, room.roomId);
+      if (notificationType === NotificationType.Mute) {
         setUnreadAtom({
           type: 'DELETE',
           roomId: room.roomId,
@@ -213,7 +214,15 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       }
 
       if (mEvent.getSender() === mx.getUserId()) return;
-      setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
+      const unreadInfo = getUnreadInfo(room);
+      if (
+        notificationType === NotificationType.MentionsAndKeywords &&
+        unreadInfo.total === 0 &&
+        unreadInfo.highlight === 0
+      ) {
+        return;
+      }
+      setUnreadAtom({ type: 'PUT', unreadInfo });
     };
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
     return () => {

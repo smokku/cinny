@@ -8,6 +8,7 @@ If you like it, feel free to use it. If not, that's fine too.
 If you want to contribute, just open a PR.
 
 Live version of this code is running at <https://matrix.chrome.pl/>
+and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 
 ## Added
 
@@ -34,6 +35,7 @@ Live version of this code is running at <https://matrix.chrome.pl/>
 - Icons in the hierarchy item menu.
 - Fixed PageZoomInput text wrapping.
 - Changed the emoji and sticker pack selector to a dropdown.
+- Phantom Space-level unread indicators in the sidebar.
 
 Back to regular programming…
 
