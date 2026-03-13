@@ -46,13 +46,23 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   const alive = useAlive();
   const creators = useRoomCreators(room);
 
+  const createContent = useStateEvent(
+    room,
+    StateEvent.RoomCreate
+  )?.getContent<IRoomCreateContent>();
+  const currentRoomVersion = createContent?.room_version ?? '1';
+
   const capabilities = useCapabilities();
   const roomVersions = capabilities['m.room_versions'];
-  const [selectedRoomVersion, selectRoomVersion] = useState(roomVersions?.default ?? '1');
+  const defaultVersion = roomVersions?.default ?? '1';
+  const [selectedRoomVersion, selectRoomVersion] = useState(currentRoomVersion);
+
   useEffect(() => {
-    // capabilities load async
-    selectRoomVersion(roomVersions?.default ?? '1');
-  }, [roomVersions?.default]);
+    // capabilities load async; bump selection to server default if it's higher
+    if (parseInt(defaultVersion, 10) > parseInt(currentRoomVersion, 10)) {
+      selectRoomVersion(defaultVersion);
+    }
+  }, [defaultVersion, currentRoomVersion]);
 
   const allowAdditionalCreators = creatorsSupported(selectedRoomVersion);
   const { additionalCreators, addAdditionalCreator, removeAdditionalCreator } =
