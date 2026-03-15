@@ -448,6 +448,7 @@ function ThreadReplyChip({
 }) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const nicknames = useAtomValue(nicknamesAtom);
 
   const thread = room.getThread(mEventId);
   const replyEvents = thread
@@ -477,7 +478,7 @@ function ThreadReplyChip({
   const latestReply = visibleReplyEvents[visibleReplyEvents.length - 1];
   const latestSenderId = latestReply?.getSender() ?? '';
   const latestSenderName =
-    getMemberDisplayName(room, latestSenderId) ??
+    getMemberDisplayName(room, latestSenderId, nicknames) ??
     getMxIdLocalPart(latestSenderId) ??
     latestSenderId;
   const latestBody = (latestReply?.getContent()?.body as string | undefined) ?? '';
@@ -497,7 +498,9 @@ function ThreadReplyChip({
               ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 20, 20, 'crop') ?? undefined
               : undefined;
             const displayName =
-              getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+              getMemberDisplayName(room, senderId, nicknames) ??
+              getMxIdLocalPart(senderId) ??
+              senderId;
 
             return (
               <Avatar key={senderId} size="200" style={{ marginLeft: index > 0 ? '-4px' : 0 }}>

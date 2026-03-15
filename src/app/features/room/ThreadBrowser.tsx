@@ -23,6 +23,7 @@ import {
 } from 'folds';
 import { MatrixEvent, NotificationCountType, Room } from 'matrix-js-sdk';
 import { Thread, ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
+import { useAtomValue } from 'jotai';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -54,6 +55,9 @@ import {
   renderMatrixMention,
 } from '../../plugins/react-custom-html-parser';
 import { EncryptedContent } from './message';
+import { nicknamesAtom } from '../../state/nicknames';
+import { UnreadBadge } from '../../components/unread-badge';
+import { countThreadUnread } from '../../utils/thread';
 import * as css from './ThreadDrawer.css';
 
 type ThreadPreviewProps = {
@@ -65,6 +69,7 @@ type ThreadPreviewProps = {
 function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const nicknames = useAtomValue(nicknamesAtom);
   const { navigateRoom } = useRoomNavigate();
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
@@ -108,7 +113,7 @@ function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
 
   const senderId = rootEvent.getSender() ?? '';
   const displayName =
-    getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+    getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId;
   const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
   const getContent = (() => rootEvent.getContent()) as GetContentCallback;
 
@@ -121,7 +126,9 @@ function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
     .at(-1);
   const lastSenderId = lastReply?.getSender() ?? '';
   const lastDisplayName =
-    getMemberDisplayName(room, lastSenderId) ?? getMxIdLocalPart(lastSenderId) ?? lastSenderId;
+    getMemberDisplayName(room, lastSenderId, nicknames) ??
+    getMxIdLocalPart(lastSenderId) ??
+    lastSenderId;
   const lastContent = lastReply?.getContent();
   const lastBody: string = typeof lastContent?.body === 'string' ? lastContent.body : '';
 
