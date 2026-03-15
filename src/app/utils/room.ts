@@ -203,6 +203,7 @@ export const isNotificationEvent = (mEvent: MatrixEvent) => {
 
   if (mEvent.isRedacted()) return false;
   if (mEvent.getRelation()?.rel_type === 'm.replace') return false;
+  if (mEvent.isRelation(RelationType.Thread)) return false;
 
   return true;
 };
