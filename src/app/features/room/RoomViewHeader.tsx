@@ -322,31 +322,42 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
       backwardTimeline = backwardTimeline.getNeighbouringTimeline('b' as any);
     }
 
-    const handleTimeline = (event: MatrixEvent, eventRoom?: Room) => {
-      if (eventRoom?.roomId !== room.roomId) return;
+    // Initialize thread timeline sets then fetch threads from server
+    room.createThreadsTimelineSets().then(() =>
+      room.fetchRoomThreads()
+    ).catch(() => {
+      // Silently ignore — server may not support threads
+    });
 
+    // Track threads we've already attempted to create to avoid cascading
+    // thread creation during metadata pagination.
+    const createdThreads = new Set<string>();
+
+    const handleTimeline = (event: MatrixEvent) => {
       if (event.isThreadRoot) {
         const rootId = event.getId();
-        if (rootId && !room.getThread(rootId)) {
+        if (rootId && !room.getThread(rootId) && !createdThreads.has(rootId)) {
           const rootEvent = room.findEventById(rootId);
           if (rootEvent) {
+            createdThreads.add(rootId);
             room.createThread(rootId, rootEvent, [], false);
           }
         }
       }
 
       const { threadRootId } = event;
-      if (threadRootId && !room.getThread(threadRootId)) {
+      if (threadRootId && !room.getThread(threadRootId) && !createdThreads.has(threadRootId)) {
         const rootEvent = room.findEventById(threadRootId);
         if (rootEvent) {
+          createdThreads.add(threadRootId);
           room.createThread(threadRootId, rootEvent, [], false);
         }
       }
     };
 
-    mx.on(RoomEvent.Timeline, handleTimeline as any);
+    room.on(RoomEvent.Timeline, handleTimeline);
     return () => {
-      mx.off(RoomEvent.Timeline, handleTimeline as any);
+      room.removeListener(RoomEvent.Timeline, handleTimeline);
     };
   }, [room, mx]);
 
