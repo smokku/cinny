@@ -42,7 +42,7 @@ import {
   Reply,
 } from '../../components/message';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
-import { settingsAtom } from '../../state/settings';
+import { UrlPreviewSize, settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { GetContentCallback } from '../../../types/matrix/room';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
@@ -245,6 +245,7 @@ function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
                   edited={!!rootEvent.replacingEvent()}
                   mediaAutoLoad={mediaAutoLoad}
                   urlPreview={urlPreview}
+                  urlPreviewSize={UrlPreviewSize.Compact}
                   htmlReactParserOptions={htmlReactParserOptions}
                   linkifyOpts={linkifyOpts}
                   outlineAttachment

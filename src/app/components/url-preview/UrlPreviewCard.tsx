@@ -21,107 +21,109 @@ import { onEnterOrSpace } from '../../utils/keyboard';
 
 const linkStyles = { color: color.Success.Main };
 
-export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
-  ({ url, ts, ...props }, ref) => {
-    const mx = useMatrixClient();
-    const useAuthentication = useMediaAuthentication();
-    const [viewer, setViewer] = useState(false);
-    const [urlPreviewSize] = useSetting(settingsAtom, 'urlPreviewSize');
-    const [previewStatus, loadPreview] = useAsyncCallback(
-      useCallback(() => mx.getUrlPreview(url, ts), [url, ts, mx])
+export const UrlPreviewCard = as<
+  'div',
+  { url: string; ts: number; urlPreviewSize?: UrlPreviewSize }
+>(({ url, ts, urlPreviewSize: urlPreviewSizeProp, ...props }, ref) => {
+  const mx = useMatrixClient();
+  const useAuthentication = useMediaAuthentication();
+  const [viewer, setViewer] = useState(false);
+  const [urlPreviewSizeSetting] = useSetting(settingsAtom, 'urlPreviewSize');
+  const urlPreviewSize = urlPreviewSizeProp ?? urlPreviewSizeSetting;
+  const [previewStatus, loadPreview] = useAsyncCallback(
+    useCallback(() => mx.getUrlPreview(url, ts), [url, ts, mx])
+  );
+  useEffect(() => {
+    loadPreview();
+  }, [loadPreview]);
+
+  if (previewStatus.status === AsyncStatus.Error) return null;
+
+  const renderContent = (prev: IPreviewUrlResponse) => {
+    const thumbUrl = mxcUrlToHttp(
+      mx,
+      prev['og:image'] || '',
+      useAuthentication,
+      256,
+      256,
+      'scale',
+      false
     );
-    useEffect(() => {
-      loadPreview();
-    }, [loadPreview]);
 
-    if (previewStatus.status === AsyncStatus.Error) return null;
-
-    const renderContent = (prev: IPreviewUrlResponse) => {
-      const thumbUrl = mxcUrlToHttp(
-        mx,
-        prev['og:image'] || '',
-        useAuthentication,
-        256,
-        256,
-        'scale',
-        false
-      );
-
-      const imgUrl = mxcUrlToHttp(mx, prev['og:image'] || '', useAuthentication);
-      const isBig = urlPreviewSize !== UrlPreviewSize.Compact;
-      const direction = isBig ? 'Column' : 'Row';
-
-      return (
-        <Box direction={direction} grow="Yes" style={{ height: '100%' }}>
-          {thumbUrl && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(ev) => {
-                ev.preventDefault();
-                setViewer(true);
-              }}
-            >
-              <UrlPreviewImg
-                urlPreviewSize={urlPreviewSize}
-                src={thumbUrl}
-                alt={prev['og:title']}
-                title={prev['og:title']}
-                tabIndex={0}
-                onKeyDown={(evt) => onEnterOrSpace(() => setViewer(true))(evt)}
-              />
-            </a>
-          )}
-          {imgUrl && (
-            <ImageOverlay
-              src={imgUrl}
-              alt={prev['og:title']}
-              viewer={viewer}
-              requestClose={() => {
-                setViewer(false);
-              }}
-              renderViewer={(p) => <ImageViewer {...p} />}
-            />
-          )}
-          <UrlPreviewContent gap={isBig ? '0' : undefined}>
-            <Text
-              style={linkStyles}
-              truncate
-              as="a"
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              size="T200"
-              priority="300"
-            >
-              {typeof prev['og:site_name'] === 'string' && `${prev['og:site_name']} | `}
-              {tryDecodeURIComponent(url)}
-            </Text>
-            <Text truncate priority="400">
-              <b>{prev['og:title']}</b>
-            </Text>
-            <Text size="T200" priority="300">
-              <UrlPreviewDescription>{prev['og:description']}</UrlPreviewDescription>
-            </Text>
-          </UrlPreviewContent>
-        </Box>
-      );
-    };
+    const imgUrl = mxcUrlToHttp(mx, prev['og:image'] || '', useAuthentication);
+    const isBig = urlPreviewSize !== UrlPreviewSize.Compact;
+    const direction = isBig ? 'Column' : 'Row';
 
     return (
-      <UrlPreview {...props} ref={ref}>
-        {previewStatus.status === AsyncStatus.Success ? (
-          renderContent(previewStatus.data)
-        ) : (
-          <Box grow="Yes" alignItems="Center" justifyContent="Center">
-            <Spinner variant="Secondary" size="400" />
-          </Box>
+      <Box direction={direction} grow="Yes" style={{ height: '100%' }}>
+        {thumbUrl && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(ev) => {
+              ev.preventDefault();
+              setViewer(true);
+            }}
+          >
+            <UrlPreviewImg
+              urlPreviewSize={urlPreviewSize}
+              src={thumbUrl}
+              alt={prev['og:title']}
+              title={prev['og:title']}
+              tabIndex={0}
+              onKeyDown={(evt) => onEnterOrSpace(() => setViewer(true))(evt)}
+            />
+          </a>
         )}
-      </UrlPreview>
+        {imgUrl && (
+          <ImageOverlay
+            src={imgUrl}
+            alt={prev['og:title']}
+            viewer={viewer}
+            requestClose={() => {
+              setViewer(false);
+            }}
+            renderViewer={(p) => <ImageViewer {...p} />}
+          />
+        )}
+        <UrlPreviewContent gap={isBig ? '0' : undefined}>
+          <Text
+            style={linkStyles}
+            truncate
+            as="a"
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            size="T200"
+            priority="300"
+          >
+            {typeof prev['og:site_name'] === 'string' && `${prev['og:site_name']} | `}
+            {tryDecodeURIComponent(url)}
+          </Text>
+          <Text truncate priority="400">
+            <b>{prev['og:title']}</b>
+          </Text>
+          <Text size="T200" priority="300">
+            <UrlPreviewDescription>{prev['og:description']}</UrlPreviewDescription>
+          </Text>
+        </UrlPreviewContent>
+      </Box>
     );
-  }
-);
+  };
+
+  return (
+    <UrlPreview {...props} ref={ref}>
+      {previewStatus.status === AsyncStatus.Success ? (
+        renderContent(previewStatus.data)
+      ) : (
+        <Box grow="Yes" alignItems="Center" justifyContent="Center">
+          <Spinner variant="Secondary" size="400" />
+        </Box>
+      )}
+    </UrlPreview>
+  );
+});
 
 export const UrlPreviewHolder = as<'div'>(({ children, ...props }, ref) => {
   const scrollRef = useRef<HTMLDivElement>(null);
