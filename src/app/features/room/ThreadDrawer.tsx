@@ -3,7 +3,8 @@ import { Box, Header, Icon, IconButton, Icons, Scroll, Text, config } from 'fold
 import { RelationType } from 'matrix-js-sdk/lib/@types/event';
 import { ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
 import { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
-import { Room, RoomEvent } from 'matrix-js-sdk/lib/models/room';
+import { NotificationCountType } from 'matrix-js-sdk';
+import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk/lib/models/room';
 import { ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { ReactEditor } from 'slate-react';
@@ -343,31 +344,59 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
       return false;
     };
 
-    const onTimeline = (mEvent: MatrixEvent) => {
+    const onTimeline: RoomEventHandlerMap[RoomEvent.Timeline] = (mEvent) => {
       if (isEventInThread(mEvent)) {
         forceUpdate((n) => n + 1);
       }
     };
-    const onRedaction = (mEvent: MatrixEvent) => {
-      // Redactions (removing reactions/messages) should also trigger updates
+    const onRedaction: RoomEventHandlerMap[RoomEvent.Redaction] = (mEvent) => {
       if (isEventInThread(mEvent)) {
         forceUpdate((n) => n + 1);
       }
     };
     const onThreadUpdate = () => forceUpdate((n) => n + 1);
-    mx.on(RoomEvent.Timeline, onTimeline as any);
-    (room as any).on(RoomEvent.Redaction, onRedaction as any);
-    (room as any).on(ThreadEvent.Update, onThreadUpdate as any);
-    (room as any).on(ThreadEvent.NewReply, onThreadUpdate as any);
+    room.on(RoomEvent.Timeline, onTimeline);
+    room.on(RoomEvent.Redaction, onRedaction);
+    (room as any).on(ThreadEvent.Update, onThreadUpdate);
+    (room as any).on(ThreadEvent.NewReply, onThreadUpdate);
     return () => {
-      mx.off(RoomEvent.Timeline, onTimeline as any);
-      (room as any).removeListener(RoomEvent.Redaction, onRedaction as any);
-      (room as any).removeListener(ThreadEvent.Update, onThreadUpdate as any);
-      (room as any).removeListener(ThreadEvent.NewReply, onThreadUpdate as any);
+      room.removeListener(RoomEvent.Timeline, onTimeline);
+      room.removeListener(RoomEvent.Redaction, onRedaction);
+      (room as any).removeListener(ThreadEvent.Update, onThreadUpdate);
+      (room as any).removeListener(ThreadEvent.NewReply, onThreadUpdate);
     };
   }, [mx, room, threadRootId]);
 
-  // Mark thread as read when viewing it
+  // Use the Thread object if available (authoritative source with full history).
+  // Fall back to scanning the live room timeline for local echoes and the
+  // window before the Thread object is registered by the SDK.
+  const replyEvents: MatrixEvent[] = (() => {
+    const thread = room.getThread(threadRootId);
+    const fromThread = thread?.events ?? [];
+    if (fromThread.length > 0) {
+      return fromThread.filter(
+        (ev: MatrixEvent) =>
+          ev.getId() !== threadRootId &&
+          !reactionOrEditEvent(ev) &&
+          (!ev.isRedacted() || showHiddenEvents)
+      );
+    }
+    return room
+      .getUnfilteredTimelineSet()
+      .getLiveTimeline()
+      .getEvents()
+      .filter(
+        (ev: MatrixEvent) =>
+          ev.threadRootId === threadRootId &&
+          ev.getId() !== threadRootId &&
+          !reactionOrEditEvent(ev) &&
+          (!ev.isRedacted() || showHiddenEvents)
+      );
+  })();
+
+  replyEventsRef.current = replyEvents;
+
+  // Mark thread as read when viewing it and when new messages arrive
   useEffect(() => {
     const markThreadAsRead = async () => {
       const thread = room.getThread(threadRootId);
@@ -391,10 +420,12 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
         room.getThreadUnreadNotificationCount(threadRootId, NotificationCountType.Total) > 0 ||
         room.getThreadUnreadNotificationCount(threadRootId, NotificationCountType.Highlight) > 0;
 
-      // Only send receipt if we haven't already read up to the last event
-      if (readUpToId !== lastEventId) {
+      if (readUpToId !== lastEventId || hasServerUnread) {
         try {
-          await mx.sendReadReceipt(lastEvent, ReceiptType.Read);
+          await mx.sendReadReceipt(
+            lastEvent,
+            hideActivity ? ReceiptType.ReadPrivate : ReceiptType.Read
+          );
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn('Failed to send thread read receipt:', err);
@@ -402,34 +433,8 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
       }
     };
 
-    // Mark as read when opened and when new messages arrive
     markThreadAsRead();
-  }, [mx, room, threadRootId, forceUpdate]);
-
-  // Use the Thread object if available (authoritative source with full history).
-  // Fall back to scanning the live room timeline for local echoes and the
-  // window before the Thread object is registered by the SDK.
-  const replyEvents: MatrixEvent[] = (() => {
-    const thread = room.getThread(threadRootId);
-    const fromThread = thread?.events ?? [];
-    if (fromThread.length > 0) {
-      return fromThread.filter(
-        (ev: MatrixEvent) => ev.getId() !== threadRootId && !reactionOrEditEvent(ev)
-      );
-    }
-    return room
-      .getUnfilteredTimelineSet()
-      .getLiveTimeline()
-      .getEvents()
-      .filter(
-        (ev: MatrixEvent) =>
-          ev.threadRootId === threadRootId &&
-          ev.getId() !== threadRootId &&
-          !reactionOrEditEvent(ev)
-      );
-  })();
-
-  replyEventsRef.current = replyEvents;
+  }, [mx, room, threadRootId, replyEvents.length, hideActivity]);
 
   // Auto-scroll to bottom when event count grows (if the user is near the bottom).
   useEffect(() => {
