@@ -544,6 +544,10 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
       openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
       return;
     }
+    if (!peopleDrawer) {
+      setOpenThread(undefined);
+      setThreadBrowserOpen(false);
+    }
     setPeopleDrawer(!peopleDrawer);
   };
 
@@ -719,6 +723,9 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                     return;
                   }
 
+                  if (!threadBrowserOpen) {
+                    setPeopleDrawer(false);
+                  }
                   setThreadBrowserOpen(!threadBrowserOpen);
                 }}
                 aria-pressed={threadBrowserOpen || !!openThreadId}
@@ -741,7 +748,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                     </Text>
                   </Badge>
                 )}
-                <Icon size="400" src={Icons.Thread} filled={threadBrowserOpen} />
+                <Icon size="400" src={Icons.Thread} filled={threadBrowserOpen || !!openThreadId} />
               </IconButton>
             )}
           </TooltipProvider>
@@ -761,8 +768,17 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleMemberToggle}>
-                  <Icon size="400" src={Icons.User} />
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={handleMemberToggle}
+                  aria-pressed={peopleDrawer && !openThreadId && !threadBrowserOpen}
+                >
+                  <Icon
+                    size="400"
+                    src={Icons.User}
+                    filled={peopleDrawer && !openThreadId && !threadBrowserOpen}
+                  />
                 </IconButton>
               )}
             </TooltipProvider>
