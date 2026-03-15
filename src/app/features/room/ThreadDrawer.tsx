@@ -43,6 +43,7 @@ import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { IReplyDraft, roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
+import { nicknamesAtom } from '../../state/nicknames';
 import { EncryptedContent, Message, Reactions } from './message';
 import { RoomInput } from './RoomInput';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
@@ -104,10 +105,11 @@ function ThreadMessage({
   // Use the thread's own timeline set so reactions/edits on thread events are found correctly
   const threadTimelineSet = room.getThread(threadRootIdProp)?.timelineSet;
   const timelineSet = threadTimelineSet ?? room.getUnfilteredTimelineSet();
+  const nicknames = useAtomValue(nicknamesAtom);
   const mEventId = mEvent.getId()!;
   const senderId = mEvent.getSender() ?? '';
   const senderDisplayName =
-    getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+    getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId;
 
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
@@ -260,6 +262,8 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   const useAuthentication = useMediaAuthentication();
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
+
+  const nicknames = useAtomValue(nicknamesAtom);
 
   // Settings
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
@@ -455,7 +459,8 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
       evt.preventDefault();
       const userId = evt.currentTarget.getAttribute('data-user-id');
       if (!userId) return;
-      const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
+      const name =
+        getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;
       editor.insertNode(
         createMentionElement(
           userId,
@@ -466,7 +471,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
       ReactEditor.focus(editor);
       moveCursor(editor);
     },
-    [mx, room, editor]
+    [mx, room, editor, nicknames]
   );
 
   const handleReplyClick = useCallback(

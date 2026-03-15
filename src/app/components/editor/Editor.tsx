@@ -83,6 +83,8 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
     },
     ref
   ) => {
+    // Each editor needs its own initial node tree. Sharing a single value
+    // breaks Slate's internal node bookkeeping when multiple editors mount.
     const [slateInitialValue] = useState<CustomElement[]>(() => [
       { type: BlockType.Paragraph, children: [{ text: '' }] },
     ]);
