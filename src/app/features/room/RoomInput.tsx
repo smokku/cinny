@@ -68,6 +68,7 @@ import { useFilePicker } from '../../hooks/useFilePicker';
 import { useFilePasteHandler } from '../../hooks/useFilePasteHandler';
 import { useFileDropZone } from '../../hooks/useFileDrop';
 import {
+  IReplyDraft,
   TUploadItem,
   TUploadMetadata,
   roomIdToMsgDraftAtomFamily,
@@ -118,16 +119,14 @@ import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 
-const getReplyContent = (replyDraft: any) => {
-  if (!replyDraft) return undefined;
-
-  const relation: Record<string, any> = {};
+const getReplyContent = (replyDraft: IReplyDraft): IContent['m.relates_to'] => {
+  const relation: Record<string, unknown> = {};
 
   if (replyDraft.relation?.rel_type === RelationType.Thread) {
     relation.event_id = replyDraft.relation.event_id;
     relation.rel_type = RelationType.Thread;
 
-    if (replyDraft.body && replyDraft.eventId !== replyDraft.relation.event_id) {
+    if (replyDraft.eventId !== replyDraft.relation.event_id) {
       relation['m.in_reply_to'] = {
         event_id: replyDraft.eventId,
       };
@@ -343,11 +342,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       handleCancelUpload(uploads);
       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
 
-      if (contents.length > 0 && plainText.length === 0 && replyDraft) {
-        contents[0]['m.relates_to'] = getReplyContent(replyDraft);
-      }
+      const relateTo =
+        contents.length > 0 && plainText.length === 0 && replyDraft
+          ? getReplyContent(replyDraft)
+          : undefined;
 
-      contents.forEach((content) => mx.sendMessage(roomId, threadRootId ?? null, content as any));
+      contents
+        .map((content) => (relateTo ? { ...content, 'm.relates_to': relateTo } : content))
+        .forEach((content) => mx.sendMessage(roomId, threadRootId ?? null, content as any));
 
       if (replyDraft) {
         if (threadRootId) {
@@ -636,7 +638,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           onPaste={handlePaste}
           top={
             replyDraft &&
-            (!threadRootId || replyDraft.body) && (
+            (!threadRootId || replyDraft.eventId !== threadRootId) && (
               <div>
                 <Box
                   alignItems="Center"
