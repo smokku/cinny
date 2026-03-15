@@ -54,15 +54,24 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
       return (
         <Box direction={direction} grow="Yes" style={{ height: '100%' }}>
           {thumbUrl && (
-            <UrlPreviewImg
-              urlPreviewSize={urlPreviewSize}
-              src={thumbUrl}
-              alt={prev['og:title']}
-              title={prev['og:title']}
-              tabIndex={0}
-              onKeyDown={(evt) => onEnterOrSpace(() => setViewer(true))(evt)}
-              onClick={() => setViewer(true)}
-            />
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(ev) => {
+                ev.preventDefault();
+                setViewer(true);
+              }}
+            >
+              <UrlPreviewImg
+                urlPreviewSize={urlPreviewSize}
+                src={thumbUrl}
+                alt={prev['og:title']}
+                title={prev['og:title']}
+                tabIndex={0}
+                onKeyDown={(evt) => onEnterOrSpace(() => setViewer(true))(evt)}
+              />
+            </a>
           )}
           {imgUrl && (
             <ImageOverlay
