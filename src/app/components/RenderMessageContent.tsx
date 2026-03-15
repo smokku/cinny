@@ -32,7 +32,7 @@ import { TextViewer } from './text-viewer';
 import { testMatrixTo } from '../plugins/matrix-to';
 import { IImageContent } from '../../types/matrix/common';
 import { useSetting } from '../state/hooks/settings';
-import { settingsAtom } from '../state/settings';
+import { UrlPreviewSize, settingsAtom } from '../state/settings';
 import { ClientSideHoverFreeze } from './ClientSideHoverFreeze';
 
 type RenderMessageContentProps = {
@@ -43,6 +43,7 @@ type RenderMessageContentProps = {
   getContent: <T>() => T;
   mediaAutoLoad?: boolean;
   urlPreview?: boolean;
+  urlPreviewSize?: UrlPreviewSize;
   highlightRegex?: RegExp;
   htmlReactParserOptions: HTMLReactParserOptions;
   linkifyOpts: Opts;
@@ -56,6 +57,7 @@ export function RenderMessageContent({
   getContent,
   mediaAutoLoad,
   urlPreview,
+  urlPreviewSize,
   highlightRegex,
   htmlReactParserOptions,
   linkifyOpts,
@@ -67,7 +69,7 @@ export function RenderMessageContent({
     return (
       <UrlPreviewHolder>
         {filteredUrls.map((url) => (
-          <UrlPreviewCard key={url} url={url} ts={ts} />
+          <UrlPreviewCard key={url} url={url} ts={ts} urlPreviewSize={urlPreviewSize} />
         ))}
       </UrlPreviewHolder>
     );
