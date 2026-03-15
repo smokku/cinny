@@ -653,6 +653,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   atBottomRef.current = atBottom;
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timelineContentRef = useRef<HTMLDivElement>(null);
   const scrollToBottomRef = useRef({
     count: 0,
     smooth: true,
@@ -666,6 +667,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }
     | undefined
   >();
+  const focusAnchorRef = useRef<{ eventId: string; viewportPos: number } | undefined>();
   const alive = useAlive();
 
   const linkifyOpts = useMemo<LinkifyOpts>(
@@ -874,12 +876,52 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         const scrollElement = getScrollElement();
         if (!editorBaseEntry || !scrollElement) return;
 
-        if (atBottomRef.current) {
+        if (atBottomRef.current && !focusAnchorRef.current) {
           scrollToBottom(scrollElement);
         }
       };
     }, [getScrollElement, roomInputRef]),
     useCallback(() => roomInputRef.current, [roomInputRef])
+  );
+
+  // Stay at bottom when timeline content resizes, or keep focused item in view
+  useResizeObserver(
+    useMemo(() => {
+      let ready = false;
+      requestAnimationFrame(() => {
+        ready = true;
+      });
+      return () => {
+        if (!ready) return;
+        const scrollElement = getScrollElement();
+        if (!scrollElement) return;
+
+        const anchor = focusAnchorRef.current;
+
+        // If a focused item exists, compensate for layout shift (e.g. images loading)
+        // by comparing the element's viewport-relative position with the saved one.
+        // Using viewport position (offsetTop - scrollTop) ignores pagination-induced
+        // changes where both offsetTop and scrollTop shift together.
+        if (anchor) {
+          const el = scrollElement.querySelector(
+            `[data-message-id="${anchor.eventId}"]`
+          ) as HTMLElement | null;
+          if (el) {
+            const currentViewportPos = el.offsetTop - scrollElement.scrollTop;
+            const drift = currentViewportPos - anchor.viewportPos;
+            if (Math.abs(drift) > 1) {
+              scrollElement.scrollTop += drift;
+            }
+          }
+          return;
+        }
+
+        if (atBottomRef.current && atLiveEndRef.current) {
+          scrollToBottom(scrollElement);
+        }
+      };
+    }, [getScrollElement]),
+    useCallback(() => timelineContentRef.current, [])
   );
 
   const tryAutoMarkAsRead = useCallback(() => {
@@ -1016,6 +1058,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       });
     }
 
+    // Save the focused element's viewport-relative position and event ID so the
+    // resize observer can compensate for layout shifts (e.g. images loading above it).
+    // We track viewport position (offsetTop - scrollTop) rather than raw offsetTop,
+    // because pagination also changes offsetTop but the paginator already adjusts scrollTop.
+    // We track by event ID because pagination can shift absolute indices.
+    if (focusItem) {
+      const scrollEl = scrollRef.current;
+      const el = scrollEl?.querySelector(
+        `[data-message-item="${focusItem.index}"]`
+      ) as HTMLElement | null;
+      const focusEventId = el?.getAttribute('data-message-id');
+      focusAnchorRef.current =
+        el && focusEventId
+          ? { eventId: focusEventId, viewportPos: el.offsetTop - (scrollEl?.scrollTop ?? 0) }
+          : undefined;
+    } else {
+      focusAnchorRef.current = undefined;
+    }
+
     setTimeout(() => {
       if (!alive()) return;
       setFocusItem((currentItem) => {
@@ -1028,7 +1089,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   // scroll to bottom of timeline
   const scrollToBottomCount = scrollToBottomRef.current.count;
   useLayoutEffect(() => {
-    if (scrollToBottomCount > 0) {
+    if (scrollToBottomCount > 0 && !focusAnchorRef.current) {
       const scrollEl = scrollRef.current;
       if (scrollEl)
         scrollToBottom(scrollEl, scrollToBottomRef.current.smooth ? 'smooth' : 'instant');
@@ -2001,6 +2062,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       )}
       <Scroll ref={scrollRef} visibility="Hover">
         <Box
+          ref={timelineContentRef}
           direction="Column"
           justifyContent="End"
           style={{ minHeight: '100%', padding: `${config.space.S600} 0` }}
