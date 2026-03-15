@@ -25,7 +25,7 @@ import {
   Button,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { MatrixEvent, NotificationCountType, Room, RoomEvent } from 'matrix-js-sdk';
+import { Direction, MatrixEvent, NotificationCountType, Room, RoomEvent } from 'matrix-js-sdk';
 import { ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
@@ -457,18 +457,19 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
     const liveTimeline = room.getLiveTimeline();
     scanTimelineForThreads(liveTimeline);
 
-    let backwardTimeline = liveTimeline.getNeighbouringTimeline('b' as any);
+    let backwardTimeline = liveTimeline.getNeighbouringTimeline(Direction.Backward);
     while (backwardTimeline) {
       scanTimelineForThreads(backwardTimeline);
-      backwardTimeline = backwardTimeline.getNeighbouringTimeline('b' as any);
+      backwardTimeline = backwardTimeline.getNeighbouringTimeline(Direction.Backward);
     }
 
     // Initialize thread timeline sets then fetch threads from server
-    room.createThreadsTimelineSets().then(() =>
-      room.fetchRoomThreads()
-    ).catch(() => {
-      // Silently ignore — server may not support threads
-    });
+    room
+      .createThreadsTimelineSets()
+      .then(() => room.fetchRoomThreads())
+      .catch(() => {
+        // Silently ignore — server may not support threads
+      });
 
     // Track threads we've already attempted to create to avoid cascading
     // thread creation during metadata pagination.
