@@ -15,6 +15,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Branding support via config.json.
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
+- Dedicated threads sidebar user interface.
 - Extended user profiles, banners, nicknames, and extended presence handling.
 - Set user presence using User Menu.
 - Presence display in the members drawer.
