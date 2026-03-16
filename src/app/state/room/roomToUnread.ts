@@ -4,6 +4,7 @@ import {
   IRoomTimelineData,
   MatrixClient,
   MatrixEvent,
+  MatrixEventEvent,
   Room,
   RoomEvent,
   SyncState,
@@ -227,6 +228,37 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
     return () => {
       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+    };
+  }, [mx, setUnreadAtom]);
+
+  useEffect(() => {
+    const handleDecrypted = (mEvent: MatrixEvent) => {
+      if (mEvent.isDecryptionFailure()) return;
+      if (!isNotificationEvent(mEvent)) return;
+
+      const roomId = mEvent.getRoomId();
+      if (!roomId) return;
+      const room = mx.getRoom(roomId);
+      if (!room || room.isSpaceRoom()) return;
+
+      const notificationType = getNotificationType(mx, room.roomId);
+      if (notificationType === NotificationType.Mute) return;
+
+      if (mEvent.getSender() === mx.getUserId()) return;
+
+      const unreadInfo = getUnreadInfo(room);
+      if (
+        notificationType === NotificationType.MentionsAndKeywords &&
+        unreadInfo.total === 0 &&
+        unreadInfo.highlight === 0
+      ) {
+        return;
+      }
+      setUnreadAtom({ type: 'PUT', unreadInfo });
+    };
+    mx.on(MatrixEventEvent.Decrypted, handleDecrypted);
+    return () => {
+      mx.removeListener(MatrixEventEvent.Decrypted, handleDecrypted);
     };
   }, [mx, setUnreadAtom]);
 
