@@ -22,7 +22,11 @@ export function ClientSideHoverFreeze({ children, src, className }: ClientSideHo
         canvasRef.current.width = img.naturalWidth || img.width;
         canvasRef.current.height = img.naturalHeight || img.height;
         const ctx = canvasRef.current.getContext('2d');
-        ctx?.drawImage(img, 0, 0);
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0);
+        }
         setIsCanvasReady(true);
       }
     };
