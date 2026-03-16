@@ -85,6 +85,8 @@ import {
   getMemberDisplayName,
   isMembershipChanged,
   reactionOrEditEvent,
+  getThreadReplies,
+  formatThreadReplyCount,
 } from '../../utils/room';
 import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
@@ -450,31 +452,26 @@ function ThreadReplyChip({
   const nicknames = useAtomValue(nicknamesAtom);
 
   const thread = room.getThread(mEventId);
-  const replyEvents = thread
-    ? thread.events.filter((ev) => ev.getId() !== mEventId && !reactionOrEditEvent(ev))
+  const threadEvents = thread
+    ? thread.events
     : room
         .getUnfilteredTimelineSet()
         .getLiveTimeline()
         .getEvents()
-        .filter(
-          (ev) =>
-            ev.threadRootId === mEventId && ev.getId() !== mEventId && !reactionOrEditEvent(ev)
-        );
+        .filter((ev) => ev.threadRootId === mEventId);
 
-  const replyCount = thread ? thread.length : replyEvents.length;
+  const { allReplies, visibleReplies, redactedCount } = getThreadReplies(threadEvents, mEventId);
+
+  const replyCount = thread ? thread.length : allReplies.length;
   if (replyCount === 0) return null;
 
-  const uniqueSenders: string[] = [];
-  const seen = new Set<string>();
-  replyEvents.forEach((ev) => {
-    const senderId = ev.getSender();
-    if (senderId && !seen.has(senderId)) {
-      seen.add(senderId);
-      uniqueSenders.push(senderId);
-    }
-  });
+  const displayCount = replyCount - redactedCount;
 
-  const latestReply = visibleReplyEvents[visibleReplyEvents.length - 1];
+  const uniqueSenders = [
+    ...new Set(visibleReplies.map((ev) => ev.getSender()).filter((id): id is string => !!id)),
+  ];
+
+  const latestReply = visibleReplies[visibleReplies.length - 1];
   const latestSenderId = latestReply?.getSender() ?? '';
   const latestSenderName =
     getMemberDisplayName(room, latestSenderId, nicknames) ??
@@ -521,8 +518,7 @@ function ThreadReplyChip({
       onClick={onToggle}
     >
       <Text size="T300" style={{ whiteSpace: 'nowrap' }}>
-        {displayCount}&nbsp;{displayCount === 1 ? 'reply' : 'replies'}
-        {redactedCount > 0 && ` (${redactedCount} deleted)`}
+        {formatThreadReplyCount(displayCount, redactedCount)}
       </Text>
       {latestBody && (
         <Text

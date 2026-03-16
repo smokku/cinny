@@ -26,6 +26,8 @@ import {
   getEventReactions,
   getMemberDisplayName,
   reactionOrEditEvent,
+  getThreadReplies,
+  formatThreadReplyCount,
 } from '../../utils/room';
 import { getMxIdLocalPart, toggleReaction } from '../../utils/matrix';
 import { minuteDifference } from '../../utils/time';
@@ -374,29 +376,24 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   // Use the Thread object if available (authoritative source with full history).
   // Fall back to scanning the live room timeline for local echoes and the
   // window before the Thread object is registered by the SDK.
-  const replyEvents: MatrixEvent[] = (() => {
+  const { allReplies, visibleReplies, redactedCount } = (() => {
     const thread = room.getThread(threadRootId);
     const fromThread = thread?.events ?? [];
     if (fromThread.length > 0) {
-      return fromThread.filter(
-        (ev: MatrixEvent) =>
-          ev.getId() !== threadRootId &&
-          !reactionOrEditEvent(ev) &&
-          (!ev.isRedacted() || showHiddenEvents)
-      );
+      return getThreadReplies(fromThread, threadRootId);
     }
-    return room
-      .getUnfilteredTimelineSet()
-      .getLiveTimeline()
-      .getEvents()
-      .filter(
-        (ev: MatrixEvent) =>
-          ev.threadRootId === threadRootId &&
-          ev.getId() !== threadRootId &&
-          !reactionOrEditEvent(ev) &&
-          (!ev.isRedacted() || showHiddenEvents)
-      );
+    return getThreadReplies(
+      room
+        .getUnfilteredTimelineSet()
+        .getLiveTimeline()
+        .getEvents()
+        .filter((ev: MatrixEvent) => ev.threadRootId === threadRootId),
+      threadRootId
+    );
   })();
+
+  const replyEvents = showHiddenEvents ? allReplies : visibleReplies;
+  const displayCount = allReplies.length - redactedCount;
 
   replyEventsRef.current = replyEvents;
 
@@ -688,7 +685,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
                 }}
               >
                 <Text size="T300" priority="300">
-                  {replyEvents.length} {replyEvents.length === 1 ? 'reply' : 'replies'}
+                  {formatThreadReplyCount(displayCount, redactedCount)}
                 </Text>
               </Box>
               <Box
