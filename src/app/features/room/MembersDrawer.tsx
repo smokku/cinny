@@ -8,6 +8,8 @@ import React, {
 } from 'react';
 import {
   Avatar,
+  AvatarFallback,
+  AvatarImage,
   Badge,
   Box,
   Chip,
@@ -63,6 +65,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { nicknamesAtom } from '../../state/nicknames';
 import { AvatarPresence, PresenceBadge } from '../../components/presence';
 import { useUserPresence } from '../../hooks/useUserPresence';
+import { RoomIntegration, useRoomIntegrations } from '../../hooks/useRoomIntegrations';
 
 type MemberDrawerHeaderProps = {
   room: Room;
@@ -181,6 +184,36 @@ function MemberItem({
   );
 }
 
+function IntegrationItem({ integration }: { integration: RoomIntegration }) {
+  return (
+    <Box
+      style={{ padding: `${config.space.S100} ${config.space.S200}` }}
+      alignItems="Center"
+      gap="200"
+    >
+      <Box shrink="No">
+        <Avatar size="200">
+          {integration.avatarUrl ? (
+            <AvatarImage src={integration.avatarUrl} />
+          ) : (
+            <AvatarFallback>
+              <Icon size="50" src={integration.icon} filled />
+            </AvatarFallback>
+          )}
+        </Avatar>
+      </Box>
+      <Box direction="Column" grow="Yes" gap="0">
+        <Text size="T400" truncate>
+          {integration.name}
+        </Text>
+        <Text size="T200" truncate style={{ opacity: config.opacity.P300 }}>
+          {integration.description}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
   matchOptions: {
@@ -222,6 +255,7 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
   const memberPowerSort = useMemberPowerSort(creators, getPowerLevel);
 
   const typingMembers = useRoomTypingMember(room.roomId);
+  const integrations = useRoomIntegrations(room);
 
   const filteredMembers = useMemo(
     () => members.filter(membershipFilter.filterFn).sort(memberSort.sortFn).sort(memberPowerSort),
@@ -274,6 +308,17 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
       <Box className={css.MemberDrawerContentBase} grow="Yes">
         <Scroll ref={scrollRef} variant="Background" size="300" visibility="Hover" hideTrack>
           <Box className={css.MemberDrawerContent} direction="Column" gap="200">
+            {integrations.length > 0 && (
+              <Box className={css.DrawerGroup} direction="Column" gap="100">
+                <Box style={{ padding: config.space.S200 }} alignItems="Center" gap="100">
+                  <Icon src={Icons.Link} size="50" />
+                  <Text size="T200">Integrations</Text>
+                </Box>
+                {integrations.map((integration) => (
+                  <IntegrationItem key={integration.key} integration={integration} />
+                ))}
+              </Box>
+            )}
             <Box ref={scrollTopAnchorRef} className={css.DrawerGroup} direction="Column" gap="200">
               <Box alignItems="Center" justifyContent="SpaceBetween" gap="200">
                 <UseStateProvider initial={undefined}>
