@@ -25,6 +25,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Large URL previews.
 - Discord-like Dark Sidebar appearance toggle.
 - Change password section in settings.
+- Show active bridges in members drawer.
 
 ## Changed
 
