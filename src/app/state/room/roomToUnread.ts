@@ -4,6 +4,8 @@ import {
   IRoomTimelineData,
   MatrixClient,
   MatrixEvent,
+  MatrixEventEvent,
+  NotificationCountType,
   Room,
   RoomEvent,
   SyncState,
@@ -232,19 +234,98 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   }, [mx, setUnreadAtom]);
 
   useEffect(() => {
-    const handleReceipt = (mEvent: MatrixEvent, room: Room) => {
-      const myUserId = mx.getUserId();
-      if (!myUserId) return;
-      if (room.isSpaceRoom()) return;
-      const content = mEvent.getContent<ReceiptContent>();
+    const handleDecrypted = (mEvent: MatrixEvent) => {
+      if (mEvent.isDecryptionFailure()) return;
+      if (!isNotificationEvent(mEvent)) return;
 
-      const isMyReceipt = Object.keys(content).find((eventId) =>
-        (Object.keys(content[eventId]) as ReceiptType[]).find(
-          (receiptType) => content[eventId][receiptType][myUserId]
-        )
+      const roomId = mEvent.getRoomId();
+      if (!roomId) return;
+      const room = mx.getRoom(roomId);
+      if (!room || room.isSpaceRoom()) return;
+
+      const notificationType = getNotificationType(mx, room.roomId);
+      if (notificationType === NotificationType.Mute) return;
+
+      if (mEvent.getSender() === mx.getUserId()) return;
+
+      const unreadInfo = getUnreadInfo(room);
+      if (
+        notificationType === NotificationType.MentionsAndKeywords &&
+        unreadInfo.total === 0 &&
+        unreadInfo.highlight === 0
+      ) {
+        return;
+      }
+      setUnreadAtom({ type: 'PUT', unreadInfo });
+    };
+    mx.on(MatrixEventEvent.Decrypted, handleDecrypted);
+    return () => {
+      mx.removeListener(MatrixEventEvent.Decrypted, handleDecrypted);
+    };
+  }, [mx, setUnreadAtom]);
+
+  useEffect(() => {
+    type HandleNewReply = (thread: Thread) => void;
+    const pendingThreadResets = pendingThreadResetRef.current;
+    const roomHandlers = new Map<
+      string,
+      {
+        room: Room;
+        handleUnreadNotifications: HandleUnreadNotifications;
+        handleReceipt: HandleReceipt;
+        handleNewReply: HandleNewReply;
+      }
+    >();
+
+    const flushPendingThreadReset = (room: Room) => {
+      const pendingThreadIds = pendingThreadResets.get(room.roomId);
+      if (!pendingThreadIds) return;
+
+      pendingThreadResets.delete(room.roomId);
+      setThreadUnreadAtom({
+        type: 'SET_ROOM',
+        roomId: room.roomId,
+        threadToUnread: rebuildRoomThreadUnread(
+          room,
+          pendingThreadIds,
+          roomToThreadUnreadRef.current.get(room.roomId),
+          getNextThreadOrder
+        ),
+      });
+    };
+
+    const startPendingThreadReset = (room: Room) => {
+      if (pendingThreadResets.has(room.roomId)) return;
+
+      pendingThreadResets.set(
+        room.roomId,
+        new Set(roomToThreadUnreadRef.current.get(room.roomId)?.keys() ?? [])
       );
-      if (isMyReceipt) {
-        setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+      queueMicrotask(() => flushPendingThreadReset(room));
+    };
+
+    const handleThreadUnreadUpdate = (room: Room, threadId: string) => {
+      const pendingThreadIds = pendingThreadResets.get(room.roomId);
+      if (pendingThreadIds) {
+        pendingThreadIds.add(threadId);
+        return;
+      }
+
+      const currentRoomThreads = roomToThreadUnreadRef.current.get(room.roomId);
+      const threadUnread = createRoomThreadUnread(
+        room,
+        threadId,
+        currentRoomThreads,
+        getNextThreadOrder
+      );
+      if (threadUnread) {
+        setThreadUnreadAtom({
+          type: 'PUT',
+          roomId: room.roomId,
+          threadId,
+          unread: threadUnread,
+        });
+        return;
       }
     };
     mx.on(RoomEvent.Receipt, handleReceipt);
