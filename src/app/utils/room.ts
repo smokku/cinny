@@ -472,6 +472,22 @@ export const reactionOrEditEvent = (mEvent: MatrixEvent) =>
   mEvent.getRelation()?.rel_type === RelationType.Annotation ||
   mEvent.getRelation()?.rel_type === RelationType.Replace;
 
+export const getThreadReplies = (
+  events: MatrixEvent[],
+  rootId: string
+): { allReplies: MatrixEvent[]; visibleReplies: MatrixEvent[]; redactedCount: number } => {
+  const allReplies = events.filter((ev) => ev.getId() !== rootId && !reactionOrEditEvent(ev));
+  const redactedCount = allReplies.filter((ev) => ev.isRedacted()).length;
+  const visibleReplies = allReplies.filter((ev) => !ev.isRedacted());
+  return { allReplies, visibleReplies, redactedCount };
+};
+
+export const formatThreadReplyCount = (displayCount: number, redactedCount: number): string => {
+  const label = `${displayCount} ${displayCount === 1 ? 'reply' : 'replies'}`;
+  if (redactedCount > 0) return `${label} (${redactedCount} deleted)`;
+  return label;
+};
+
 export const getMentionContent = (userIds: string[], room: boolean): IMentions => {
   const mMentions: IMentions = {};
   if (userIds.length > 0) {
