@@ -21,7 +21,7 @@ import {
   Chip,
   toRem,
 } from 'folds';
-import { MatrixEvent, NotificationCountType, Room } from 'matrix-js-sdk';
+import { NotificationCountType, Room } from 'matrix-js-sdk';
 import { Thread, ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
 import { useAtomValue } from 'jotai';
 import { HTMLReactParserOptions } from 'html-react-parser';
@@ -29,7 +29,12 @@ import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { getMemberAvatarMxc, getMemberDisplayName, reactionOrEditEvent } from '../../utils/room';
+import {
+  getMemberAvatarMxc,
+  getMemberDisplayName,
+  getThreadReplies,
+  formatThreadReplyCount,
+} from '../../utils/room';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { UserAvatar } from '../../components/user-avatar';
 import {
@@ -117,13 +122,11 @@ function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
   const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
   const getContent = (() => rootEvent.getContent()) as GetContentCallback;
 
-  const replyCount = thread.events.filter(
-    (ev: MatrixEvent) => ev.getId() !== thread.id && !reactionOrEditEvent(ev)
-  ).length;
+  const { visibleReplies, redactedCount } = getThreadReplies(thread.events, thread.id);
+  const replyCount = thread.length;
+  const displayCount = replyCount - redactedCount;
 
-  const lastReply = thread.events
-    .filter((ev: MatrixEvent) => ev.getId() !== thread.id && !reactionOrEditEvent(ev))
-    .at(-1);
+  const lastReply = visibleReplies.at(-1);
   const lastSenderId = lastReply?.getSender() ?? '';
   const lastDisplayName =
     getMemberDisplayName(room, lastSenderId, nicknames) ??
@@ -257,7 +260,7 @@ function ThreadPreview({ room, thread, onClick }: ThreadPreviewProps) {
         {replyCount > 0 && (
           <Box gap="100" alignItems="Center" style={{ marginTop: config.space.S200 }}>
             <Text size="T200" priority="300" style={{ flexShrink: 0 }}>
-              {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+              {formatThreadReplyCount(displayCount, redactedCount)}
             </Text>
             {lastReply && lastBody && (
               <Text
