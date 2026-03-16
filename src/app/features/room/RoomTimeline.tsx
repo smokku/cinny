@@ -466,15 +466,7 @@ function ThreadReplyChip({
   const replyCount = thread ? thread.length : replyEvents.length;
   if (replyCount === 0) return null;
 
-  const uniqueSenders: string[] = [];
-  const seen = new Set<string>();
-  replyEvents.forEach((ev) => {
-    const senderId = ev.getSender();
-    if (senderId && !seen.has(senderId)) {
-      seen.add(senderId);
-      uniqueSenders.push(senderId);
-    }
-  });
+  const uniqueSenders = [...new Set(replyEvents.map((ev) => ev.getSender()).filter((id): id is string => !!id))];
 
   const latestReply = replyEvents[replyEvents.length - 1];
   const latestSenderId = latestReply?.getSender() ?? '';
