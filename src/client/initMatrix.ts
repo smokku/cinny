@@ -1,5 +1,6 @@
 import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
 
+import { quietMatrixLogger } from './matrixLogger';
 import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
@@ -30,6 +31,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
     timelineSupport: true,
     cryptoCallbacks: cryptoCallbacks as any,
     verificationMethods: ['m.sas.v1'],
+    logger: quietMatrixLogger,
   });
 
   await indexedDBStore.startup();
