@@ -3,7 +3,6 @@ import React, {
   FormEventHandler,
   MouseEventHandler,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 import {
@@ -37,9 +36,7 @@ import { stopPropagation } from '../../../utils/keyboard';
 import { useUserPresence, Presence } from '../../../hooks/useUserPresence';
 import { setUserPresence } from '../../../utils/presence';
 import { UserHero, UserHeroName } from '../../../components/user-profile/UserHero';
-import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
-import { PresenceBadge } from '../../../components/presence';
+import { AvatarPresence, PresenceBadge } from '../../../components/presence';
 
 const PresenceOptions: Array<{ value: Presence; label: string }> = [
   { value: Presence.Online, label: 'Online' },
@@ -96,8 +93,6 @@ export function UserMenuTab() {
     }
   }, [currentPresence, currentStatus, submittedState]);
 
-  const tooltip = useMemo(() => displayName, [displayName]);
-
   const handleToggle: MouseEventHandler<HTMLButtonElement> = (evt) => {
     const cords = evt.currentTarget.getBoundingClientRect();
     setMenuAnchor((cur) => (cur ? undefined : cords));
@@ -153,15 +148,21 @@ export function UserMenuTab() {
 
   return (
     <SidebarItem active={!!menuAnchor || settingsOpen}>
-      <SidebarItemTooltip tooltip={tooltip}>
+      <SidebarItemTooltip tooltip={currentStatus || displayName}>
         {(triggerRef) => (
-          <SidebarAvatar as="button" ref={triggerRef} onClick={handleToggle}>
-            <UserAvatar
-              userId={userId}
-              src={avatarUrl}
-              renderFallback={() => <Text size="H4">{nameInitials(displayName)}</Text>}
-            />
-          </SidebarAvatar>
+          <AvatarPresence
+            ref={triggerRef}
+            badge={<PresenceBadge presence={currentPresence} noTooltip size="200" />}
+          >
+            <SidebarAvatar as="button" onClick={handleToggle}>
+              <UserAvatar
+                userId={userId}
+                src={avatarUrl}
+                alt={userId}
+                renderFallback={() => <Text size="H4">{nameInitials(displayName)}</Text>}
+              />
+            </SidebarAvatar>
+          </AvatarPresence>
         )}
       </SidebarItemTooltip>
 
