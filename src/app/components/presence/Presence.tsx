@@ -24,10 +24,25 @@ type PresenceBadgeProps = {
   presence: Presence;
   status?: string;
   size?: '200' | '300' | '400' | '500';
+  noTooltip?: boolean;
 };
-export function PresenceBadge({ presence, status, size }: PresenceBadgeProps) {
+export function PresenceBadge({ presence, status, size, noTooltip }: PresenceBadgeProps) {
   const label = usePresenceLabel();
   const badgeLabelId = useId();
+
+  const badge = (
+    <Badge
+      aria-labelledby={noTooltip ? undefined : badgeLabelId}
+      size={size}
+      variant={PresenceToColor[presence]}
+      fill={presence === Presence.Offline ? 'Soft' : 'Solid'}
+      radii="Pill"
+    />
+  );
+
+  if (noTooltip) {
+    return badge;
+  }
 
   return (
     <TooltipProvider
@@ -45,16 +60,7 @@ export function PresenceBadge({ presence, status, size }: PresenceBadgeProps) {
         </Tooltip>
       }
     >
-      {(triggerRef) => (
-        <Badge
-          aria-labelledby={badgeLabelId}
-          ref={triggerRef}
-          size={size}
-          variant={PresenceToColor[presence]}
-          fill={presence === Presence.Offline ? 'Soft' : 'Solid'}
-          radii="Pill"
-        />
-      )}
+      {(triggerRef) => React.cloneElement(badge, { ref: triggerRef })}
     </TooltipProvider>
   );
 }
