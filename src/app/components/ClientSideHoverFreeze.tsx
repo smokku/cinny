@@ -19,13 +19,18 @@ export function ClientSideHoverFreeze({ children, src, className }: ClientSideHo
 
     img.onload = () => {
       if (isMounted && canvasRef.current) {
-        canvasRef.current.width = img.naturalWidth || img.width;
-        canvasRef.current.height = img.naturalHeight || img.height;
+        const container = canvasRef.current.parentElement;
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = (container?.clientWidth || img.naturalWidth) * dpr;
+        const displayHeight = (container?.clientHeight || img.naturalHeight) * dpr;
+
+        canvasRef.current.width = displayWidth;
+        canvasRef.current.height = displayHeight;
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
         }
         setIsCanvasReady(true);
       }

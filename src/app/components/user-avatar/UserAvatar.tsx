@@ -49,7 +49,7 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
   }
 
   return (
-    <ClientSideHoverFreeze src={src} className={css.UserAvatarFreeze} cursor="inherit">
+    <ClientSideHoverFreeze src={src} className={css.UserAvatarFreeze}>
       {avatarImage}
     </ClientSideHoverFreeze>
   );
