@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import { AuthDict, AuthType, MatrixError, createClient } from 'matrix-js-sdk';
+import { quietMatrixLogger } from '../../../../client/matrixLogger';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAuthServer } from '../../../hooks/useAuthServer';
@@ -79,7 +80,7 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
 
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
-  const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
+  const mx = useMemo(() => createClient({ baseUrl, logger: quietMatrixLogger }), [baseUrl]);
 
   const [formData, setFormData] = useState<FormData>();
 

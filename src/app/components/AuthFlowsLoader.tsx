@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { MatrixError, createClient } from 'matrix-js-sdk';
+import { quietMatrixLogger } from '../../client/matrixLogger';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { useAutoDiscoveryInfo } from '../hooks/useAutoDiscoveryInfo';
 import { promiseFulfilledResult, promiseRejectedResult } from '../utils/common';
@@ -19,7 +20,7 @@ export function AuthFlowsLoader({ fallback, error, children }: AuthFlowsLoaderPr
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
   const baseUrl = autoDiscoveryInfo['m.homeserver'].base_url;
 
-  const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
+  const mx = useMemo(() => createClient({ baseUrl, logger: quietMatrixLogger }), [baseUrl]);
 
   const [state, load] = useAsyncCallback(
     useCallback(async () => {
