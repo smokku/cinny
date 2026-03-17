@@ -40,13 +40,5 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
     />
   );
 
-  if (autoplayAvatars) {
-    return avatarImage;
-  }
-
-  return (
-    <ClientSideHoverFreeze src={src} className={css.UserAvatarFreeze} cursor="inherit">
-      {avatarImage}
-    </ClientSideHoverFreeze>
-  );
+  return avatarImage;
 }
