@@ -25,6 +25,7 @@ import {
   getUnreadInfo,
   getUnreadInfos,
   isNotificationEvent,
+  roomHaveUnread,
 } from '../../utils/room';
 import { roomToParentsAtom } from './roomToParents';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
@@ -223,6 +224,9 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       ) {
         return;
       }
+      if (unreadInfo.total === 0 && unreadInfo.highlight === 0 && !roomHaveUnread(mx, room)) {
+        return;
+      }
       setUnreadAtom({ type: 'PUT', unreadInfo });
     };
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -252,6 +256,9 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         unreadInfo.total === 0 &&
         unreadInfo.highlight === 0
       ) {
+        return;
+      }
+      if (unreadInfo.total === 0 && unreadInfo.highlight === 0 && !roomHaveUnread(mx, room)) {
         return;
       }
       setUnreadAtom({ type: 'PUT', unreadInfo });
