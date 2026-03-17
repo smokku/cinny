@@ -20,6 +20,7 @@ import {
   UIAFlow,
   createClient,
 } from 'matrix-js-sdk';
+import { quietMatrixLogger } from '../../../../client/matrixLogger';
 import { PasswordInput } from '../../../components/password-input';
 import { clientBranding, useClientConfig } from '../../../hooks/useClientConfig';
 import {
@@ -191,7 +192,7 @@ export function PasswordRegisterForm({
   const branding = clientBranding(clientConfig);
   const serverDiscovery = useAutoDiscoveryInfo();
   const baseUrl = serverDiscovery['m.homeserver'].base_url;
-  const mx = useMemo(() => createClient({ baseUrl }), [baseUrl]);
+  const mx = useMemo(() => createClient({ baseUrl, logger: quietMatrixLogger }), [baseUrl]);
   const params = useUIAParams(authData);
   const termUrl = getLoginTermUrl(params);
   const [formData, setFormData] = useState<FormData>();
