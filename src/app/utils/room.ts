@@ -17,6 +17,7 @@ import {
   Room,
   RoomMember,
 } from 'matrix-js-sdk';
+import { PushProcessor } from 'matrix-js-sdk/lib/pushprocessor';
 import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import {
