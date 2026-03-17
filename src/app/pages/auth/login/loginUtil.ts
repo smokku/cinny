@@ -2,6 +2,7 @@ import to from 'await-to-js';
 import { LoginRequest, LoginResponse, MatrixError, createClient } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { quietMatrixLogger } from '../../../../client/matrixLogger';
 import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
 import { ErrorCode } from '../../../cs-errorcode';
@@ -72,7 +73,7 @@ export const login = async (
     });
   }
 
-  const mx = createClient({ baseUrl: url });
+  const mx = createClient({ baseUrl: url, logger: quietMatrixLogger });
   const [err, res] = await to<LoginResponse, MatrixError>(mx.loginRequest(data));
 
   if (err) {
