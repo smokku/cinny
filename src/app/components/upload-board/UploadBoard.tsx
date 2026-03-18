@@ -10,15 +10,11 @@ type UploadBoardProps = {
   header: ReactNode;
 };
 export const UploadBoard = as<'div', UploadBoardProps>(({ header, children, ...props }, ref) => (
-  <Box className={css.UploadBoardBase} {...props} ref={ref}>
-    <Box className={css.UploadBoardContainer} justifyContent="End">
-      <Box className={classNames(css.UploadBoard)} direction="Column">
-        <Box grow="Yes" direction="Column">
-          {children}
-        </Box>
-        <Box direction="Column" shrink="No">
-          {header}
-        </Box>
+  <Box className={css.UploadBoardBase} direction="Column" {...props} ref={ref}>
+    <Box className={css.UploadBoard} direction="Column">
+      <Box grow="Yes">{children}</Box>
+      <Box direction="Column" shrink="No">
+        {header}
       </Box>
     </Box>
   </Box>
@@ -91,18 +87,6 @@ export function UploadBoardHeader({
         <Text size="H6">Files</Text>
       </Box>
       <Box className={css.UploadBoardHeaderContent} alignItems="Center" gap="100">
-        {isSuccess && (
-          <Chip
-            as="button"
-            onClick={handleSend}
-            variant="Primary"
-            radii="Pill"
-            outlined
-            after={<Icon src={Icons.Send} size="50" filled />}
-          >
-            <Text size="B300">Send</Text>
-          </Chip>
-        )}
         {isError && !open && (
           <Badge variant="Critical" fill="Solid" radii="300">
             <Text size="L400">Upload Failed</Text>
@@ -135,8 +119,9 @@ export function UploadBoardHeader({
 export const UploadBoardContent = as<'div'>(({ className, children, ...props }, ref) => (
   <Box
     className={classNames(css.UploadBoardContent, className)}
-    direction="Column"
+    direction="Row"
     gap="200"
+    shrink="No"
     {...props}
     ref={ref}
   >
