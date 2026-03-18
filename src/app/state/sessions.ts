@@ -13,6 +13,7 @@ export type Session = {
   expiresInMs?: number;
   refreshToken?: string;
   fallbackSdkStores?: boolean;
+  slidingSyncOptIn?: boolean;
 };
 
 export type Sessions = Session[];
@@ -40,6 +41,15 @@ export function setFallbackSession(
   localStorage.setItem('cinny_user_id', userId);
   localStorage.setItem('cinny_hs_base_url', baseUrl);
 }
+const SLIDING_SYNC_OPT_IN_KEY = 'cinny_sliding_sync_opt_in';
+
+export const getSlidingSyncOptIn = (): boolean =>
+  localStorage.getItem(SLIDING_SYNC_OPT_IN_KEY) === 'true';
+
+export const setSlidingSyncOptIn = (value: boolean): void => {
+  localStorage.setItem(SLIDING_SYNC_OPT_IN_KEY, String(value));
+};
+
 export const removeFallbackSession = () => {
   localStorage.removeItem('cinny_hs_base_url');
   localStorage.removeItem('cinny_user_id');
@@ -59,6 +69,7 @@ export const getFallbackSession = (): Session | undefined => {
       deviceId,
       accessToken,
       fallbackSdkStores: true,
+      slidingSyncOptIn: getSlidingSyncOptIn(),
     };
 
     return session;

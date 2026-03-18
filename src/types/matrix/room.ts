@@ -58,7 +58,7 @@ export enum RoomType {
 }
 
 export type MSpaceChildContent = {
-  via: string[];
+  via?: string[];
   suggested?: boolean;
   order?: string;
 };

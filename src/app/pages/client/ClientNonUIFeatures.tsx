@@ -27,6 +27,7 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { nicknamesAtom } from '../../state/nicknames';
+import { useSlidingSyncActiveRoom } from '../../hooks/useSlidingSyncActiveRoom';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -261,6 +262,11 @@ type ClientNonUIFeaturesProps = {
   children: ReactNode;
 };
 
+function SlidingSyncActiveRoomSubscriber() {
+  useSlidingSyncActiveRoom();
+  return null;
+}
+
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
@@ -269,6 +275,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
+      <SlidingSyncActiveRoomSubscriber />
       {children}
     </>
   );

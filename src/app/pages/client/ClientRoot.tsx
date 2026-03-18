@@ -15,7 +15,14 @@ import {
 } from 'folds';
 import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient } from 'matrix-js-sdk';
 import FocusTrap from 'focus-trap-react';
-import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   clearCacheAndReload,
   clearLoginData,
@@ -28,6 +35,7 @@ import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
 import { MediaConfigProvider } from '../../hooks/useMediaConfig';
 import { MatrixClientProvider } from '../../hooks/useMatrixClient';
+import { useClientConfig } from '../../hooks/useClientConfig';
 import { SpecVersions } from './SpecVersions';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useSyncState } from '../../hooks/useSyncState';
@@ -145,20 +153,30 @@ type ClientRootProps = {
 };
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
-  const { baseUrl, userId } = getFallbackSession() ?? {};
+  const clientConfig = useClientConfig();
+  const session = useMemo(() => getFallbackSession(), []);
+  const { baseUrl, userId } = session ?? {};
 
   const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
     useCallback(() => {
-      const session = getFallbackSession();
-      if (!session) {
+      const s = getFallbackSession();
+      if (!s) {
         throw new Error('No session Found!');
       }
-      return initClient(session);
+      return initClient(s);
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
   const [startState, startMatrix] = useAsyncCallback<void, Error, [MatrixClient]>(
-    useCallback((m) => startClient(m), [])
+    useCallback(
+      (m) =>
+        startClient(m, {
+          baseUrl: session?.baseUrl,
+          slidingSync: clientConfig?.slidingSync,
+          sessionSlidingSyncOptIn: session?.slidingSyncOptIn,
+        }),
+      [session, clientConfig]
+    )
   );
 
   useSyncNicknames(mx);
@@ -179,7 +197,7 @@ export function ClientRoot({ children }: ClientRootProps) {
   useSyncState(
     mx,
     useCallback((state) => {
-      if (state === 'PREPARED') {
+      if (state === 'PREPARED' || state === 'SYNCING' || state === 'CATCHUP') {
         setLoading(false);
       }
     }, [])

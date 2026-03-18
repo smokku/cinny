@@ -29,6 +29,10 @@
     "basename": "/"
   },
 
+  "slidingSync": {
+    "enabled": true
+  },
+
   "branding": {
     "enabled": false,
     "name": "Chromed Cinny",

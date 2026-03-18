@@ -22,6 +22,18 @@ export type ResolvedBranding = {
   deviceDisplayName: string;
 };
 
+export type SlidingSyncClientConfig = {
+  enabled?: boolean | string | number;
+  proxyBaseUrl?: string;
+  bootstrapClassicOnColdCache?: boolean;
+  listPageSize?: number;
+  timelineLimit?: number;
+  pollTimeoutMs?: number;
+  maxRooms?: number;
+  includeInviteList?: boolean;
+  probeTimeoutMs?: number;
+};
+
 export type ClientConfig = {
   defaultHomeserver?: number;
   homeserverList?: string[];
@@ -37,6 +49,8 @@ export type ClientConfig = {
   hashRouter?: HashRouterConfig;
 
   branding?: BrandingConfig;
+
+  slidingSync?: SlidingSyncClientConfig;
 };
 
 const ClientConfigContext = createContext<ClientConfig | null>(null);

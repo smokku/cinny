@@ -56,6 +56,9 @@ import { useMessageLayoutItems } from '../../../hooks/useMessageLayout';
 import { useMessageSpacingItems } from '../../../hooks/useMessageSpacing';
 import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle } from '../styles.css';
+import { useClientConfig } from '../../../hooks/useClientConfig';
+import { resolveSlidingEnabled } from '../../../../client/initMatrix';
+import { getFallbackSession, setSlidingSyncOptIn } from '../../../state/sessions';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -1107,6 +1110,49 @@ function Messages() {
   );
 }
 
+function Sync() {
+  const clientConfig = useClientConfig();
+  const serverSlidingEnabled = resolveSlidingEnabled(clientConfig.slidingSync?.enabled);
+  const session = getFallbackSession();
+  const useSlidingSync = session?.slidingSyncOptIn === true;
+
+  const handleSetSlidingSync = () => {
+    setSlidingSyncOptIn(!useSlidingSync);
+    window.location.reload();
+  };
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400" style={{ paddingLeft: config.space.S400 }}>
+        Sync
+      </Text>
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
+        <SettingTile
+          title="Use Sliding Sync"
+          description={
+            serverSlidingEnabled
+              ? 'Faster sync using sliding sync protocol. Changing this setting will reload the page.'
+              : 'Sliding sync is not enabled on this server.'
+          }
+          after={
+            <Switch
+              variant="Primary"
+              value={useSlidingSync}
+              onChange={handleSetSlidingSync}
+              disabled={!serverSlidingEnabled}
+            />
+          }
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 type GeneralProps = {
   requestClose: () => void;
 };
@@ -1135,6 +1181,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <Sync />
             </Box>
           </PageContent>
         </Scroll>

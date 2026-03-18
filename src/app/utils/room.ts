@@ -17,7 +17,6 @@ import {
   Room,
   RoomMember,
 } from 'matrix-js-sdk';
-import { PushProcessor } from 'matrix-js-sdk/lib/pushprocessor';
 import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import {
@@ -160,6 +159,17 @@ export const getOrphanParents = (roomToParents: RoomToParents, roomId: string): 
   return orphanParents;
 };
 
+export const isDMRoom = (room: Room, mDirects?: Set<string>): boolean => {
+  if (mDirects?.has(room.roomId)) {
+    return true;
+  }
+  // Fallback: use member count heuristic for untagged DMs
+  if (!room.isSpaceRoom() && room.getJoinedMemberCount() === 2) {
+    return true;
+  }
+  return false;
+};
+
 export const isMutedRule = (rule: IPushRule) =>
   // Check for empty actions (new spec) or dont_notify (deprecated)
   (rule.actions.length === 0 || rule.actions[0] === 'dont_notify') &&
@@ -230,12 +240,52 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
     const event = liveEvents[i];
     if (!event) return false;
     if (event.getId() === readUpToId) return false;
-    if (isNotificationEvent(event)) return true;
+    if (isNotificationEvent(event)) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[unread] roomHaveUnread TRUE for',
+        room.roomId,
+        'readUpToId:',
+        readUpToId,
+        'readUpToInTimeline:',
+        liveEvents.some((e) => e.getId() === readUpToId),
+        'timelineLength:',
+        liveEvents.length,
+        'foundEvent:',
+        event.getId(),
+        'type:',
+        event.getType(),
+        'sender:',
+        event.getSender()
+      );
+      return true;
+    }
   }
+  // eslint-disable-next-line no-console
+  console.log(
+    '[unread] roomHaveUnread FALSE for',
+    room.roomId,
+    'readUpToId:',
+    readUpToId,
+    'timelineLength:',
+    liveEvents.length
+  );
   return false;
 };
 
-export const getUnreadInfo = (room: Room): UnreadInfo => {
+export type UnreadInfoOptions = {
+  applyFixup?: boolean;
+  mDirects?: Set<string>;
+};
+
+export const getUnreadInfo = (room: Room, options?: UnreadInfoOptions): UnreadInfo => {
+  const userId = room.client.getUserId();
+
+  // Sliding sync fixup: reconcile known notification-count drift
+  if (userId && options?.applyFixup) {
+    room.fixupNotifications(userId);
+  }
+
   const total = room.getUnreadNotificationCount(NotificationCountType.Total);
   const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
   return {
@@ -245,7 +295,7 @@ export const getUnreadInfo = (room: Room): UnreadInfo => {
   };
 };
 
-export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
+export const getUnreadInfos = (mx: MatrixClient, options?: UnreadInfoOptions): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
     if (room.getMyMembership() !== 'join') return unread;
@@ -257,7 +307,19 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
         ? roomHaveNotification(room)
         : roomHaveNotification(room) || roomHaveUnread(mx, room);
     if (hasUnread) {
-      unread.push(getUnreadInfo(room));
+      const unreadInfo = getUnreadInfo(room, options);
+      // eslint-disable-next-line no-console
+      console.log(
+        '[unread] getUnreadInfos',
+        room.roomId,
+        'notification:',
+        roomHaveNotification(room),
+        'haveUnread:',
+        roomHaveUnread(mx, room),
+        'unreadInfo:',
+        unreadInfo
+      );
+      unread.push(unreadInfo);
     }
 
     return unread;
