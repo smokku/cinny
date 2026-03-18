@@ -95,8 +95,10 @@ import { fulfilledPromiseSettledResult } from '../../utils/common';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import {
+  buildGalleryContent,
   getAudioMsgContent,
   getFileMsgContent,
+  getGalleryItemContent,
   getImageMsgContent,
   getVideoMsgContent,
 } from './msgContent';
@@ -326,32 +328,75 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
       const plainText = toPlainText(editor.children, isMarkdown).trim();
-      const contentsPromises = uploads.map(async (upload) => {
-        const fileItem = selectedFiles.find((f) => f.file === upload.file);
-        if (!fileItem) throw new Error('Broken upload');
+      const customHtml = trimCustomHtml(
+        toMatrixCustomHTML(editor.children, {
+          allowTextFormatting: true,
+          allowBlockMarkdown: isMarkdown,
+          allowInlineMarkdown: isMarkdown,
+        })
+      );
 
-        if (fileItem.file.type.startsWith('image')) {
-          return getImageMsgContent(mx, fileItem, upload.mxc);
-        }
-        if (fileItem.file.type.startsWith('video')) {
-          return getVideoMsgContent(mx, fileItem, upload.mxc);
-        }
-        if (fileItem.file.type.startsWith('audio')) {
-          return getAudioMsgContent(fileItem, upload.mxc);
-        }
-        return getFileMsgContent(fileItem, upload.mxc);
-      });
-      handleCancelUpload(uploads);
-      const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
+      if (uploads.length >= 2) {
+        // Gallery mode: send as single dm.filament.gallery event
+        const itemsPromises = uploads.map(async (upload) => {
+          const fileItem = selectedFiles.find((f) => f.file === upload.file);
+          if (!fileItem) throw new Error('Broken upload');
+          return getGalleryItemContent(mx, fileItem, upload.mxc);
+        });
+        handleCancelUpload(uploads);
+        const items = fulfilledPromiseSettledResult(await Promise.allSettled(itemsPromises));
 
-      const relateTo =
-        contents.length > 0 && plainText.length === 0 && replyDraft
-          ? getReplyContent(replyDraft)
-          : undefined;
+        if (items.length === 0) return;
 
-      contents
-        .map((content) => (relateTo ? { ...content, 'm.relates_to': relateTo } : content))
-        .forEach((content) => mx.sendMessage(roomId, threadRootId ?? null, content as any));
+        const caption = plainText.length > 0 ? plainText : undefined;
+        const formattedCaption =
+          caption && !customHtmlEqualsPlainText(customHtml, plainText) ? customHtml : undefined;
+        const galleryContent = buildGalleryContent(items, caption, formattedCaption);
+
+        const mentionData = getMentions(mx, roomId, editor);
+        if (replyDraft && replyDraft.userId !== mx.getUserId()) {
+          mentionData.users.add(replyDraft.userId);
+        }
+        const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
+        galleryContent['m.mentions'] = mMentions;
+
+        if (replyDraft) {
+          galleryContent['m.relates_to'] = getReplyContent(replyDraft);
+        }
+
+        mx.sendMessage(roomId, threadRootId ?? null, galleryContent as any);
+        resetEditor(editor);
+        resetEditorHistory(editor);
+        sendTypingStatus(false);
+      } else {
+        // Single file: send as individual event (existing behavior)
+        const contentsPromises = uploads.map(async (upload) => {
+          const fileItem = selectedFiles.find((f) => f.file === upload.file);
+          if (!fileItem) throw new Error('Broken upload');
+
+          if (fileItem.file.type.startsWith('image')) {
+            return getImageMsgContent(mx, fileItem, upload.mxc);
+          }
+          if (fileItem.file.type.startsWith('video')) {
+            return getVideoMsgContent(mx, fileItem, upload.mxc);
+          }
+          if (fileItem.file.type.startsWith('audio')) {
+            return getAudioMsgContent(fileItem, upload.mxc);
+          }
+          return getFileMsgContent(fileItem, upload.mxc);
+        });
+        handleCancelUpload(uploads);
+        const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
+
+        const relateTo =
+          contents.length > 0 && plainText.length === 0 && replyDraft
+            ? getReplyContent(replyDraft)
+            : undefined;
+
+        contents
+          .map((content) => (relateTo ? { ...content, 'm.relates_to': relateTo } : content))
+          .forEach((content) => mx.sendMessage(roomId, threadRootId ?? null, content as any));
+      }
 
       if (replyDraft) {
         if (threadRootId) {
@@ -369,6 +414,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const submit = useCallback(() => {
       uploadBoardHandlers.current?.handleSend();
+
+      // Gallery mode: handleSendUpload handles caption + editor reset
+      if (selectedFiles.length >= 2) return;
 
       const commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
@@ -458,6 +506,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       setReplyDraft,
       isMarkdown,
       commands,
+      selectedFiles,
     ]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
@@ -543,39 +592,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     return (
       <div ref={ref}>
-        {selectedFiles.length > 0 && (
-          <UploadBoard
-            header={
-              <UploadBoardHeader
-                open={uploadBoard}
-                onToggle={() => setUploadBoard(!uploadBoard)}
-                uploadFamilyObserverAtom={uploadFamilyObserverAtom}
-                onSend={handleSendUpload}
-                imperativeHandlerRef={uploadBoardHandlers}
-                onCancel={handleCancelUpload}
-              />
-            }
-          >
-            {uploadBoard && (
-              <Scroll size="300" hideTrack visibility="Hover">
-                <UploadBoardContent>
-                  {Array.from(selectedFiles)
-                    .reverse()
-                    .map((fileItem, index) => (
-                      <UploadCardRenderer
-                        // eslint-disable-next-line react/no-array-index-key
-                        key={index}
-                        isEncrypted={!!fileItem.encInfo}
-                        fileItem={fileItem}
-                        setMetadata={handleFileMetadata}
-                        onRemove={handleRemoveUpload}
-                      />
-                    ))}
-                </UploadBoardContent>
-              </Scroll>
-            )}
-          </UploadBoard>
-        )}
         <Overlay
           open={dropZoneVisible}
           backdrop={<OverlayBackdrop />}
@@ -639,56 +655,90 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           onKeyUp={handleKeyUp}
           onPaste={handlePaste}
           top={
-            replyDraft &&
-            (!threadRootId || replyDraft.eventId !== threadRootId) && (
-              <div>
-                <Box
-                  alignItems="Center"
-                  gap="300"
-                  style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
+            <>
+              {selectedFiles.length > 0 && (
+                <UploadBoard
+                  header={
+                    <UploadBoardHeader
+                      open={uploadBoard}
+                      onToggle={() => setUploadBoard(!uploadBoard)}
+                      uploadFamilyObserverAtom={uploadFamilyObserverAtom}
+                      onSend={handleSendUpload}
+                      imperativeHandlerRef={uploadBoardHandlers}
+                      onCancel={handleCancelUpload}
+                    />
+                  }
                 >
-                  <IconButton
-                    onClick={() => {
-                      if (threadRootId) {
-                        setReplyDraft({
-                          userId: mx.getUserId() ?? '',
-                          eventId: threadRootId,
-                          body: '',
-                          relation: { rel_type: RelationType.Thread, event_id: threadRootId },
-                        });
-                        return;
-                      }
-
-                      setReplyDraft(undefined);
-                    }}
-                    variant="SurfaceVariant"
-                    size="300"
-                    radii="300"
+                  {uploadBoard && (
+                    <Scroll direction="Horizontal" size="300" hideTrack visibility="Hover">
+                      <UploadBoardContent>
+                        {Array.from(selectedFiles)
+                          .reverse()
+                          .map((fileItem, index) => (
+                            <UploadCardRenderer
+                              // eslint-disable-next-line react/no-array-index-key
+                              key={index}
+                              isEncrypted={!!fileItem.encInfo}
+                              fileItem={fileItem}
+                              setMetadata={handleFileMetadata}
+                              onRemove={handleRemoveUpload}
+                            />
+                          ))}
+                      </UploadBoardContent>
+                    </Scroll>
+                  )}
+                </UploadBoard>
+              )}
+              {replyDraft && (!threadRootId || replyDraft.eventId !== threadRootId) && (
+                <div>
+                  <Box
+                    alignItems="Center"
+                    gap="300"
+                    style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
                   >
-                    <Icon src={Icons.Cross} size="50" />
-                  </IconButton>
-                  <Box direction="Row" gap="200" alignItems="Center">
-                    {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
-                    <ReplyLayout
-                      userColor={replyUsernameColor}
-                      username={
-                        <Text size="T300" truncate>
-                          <b>
-                            {getMemberDisplayName(room, replyDraft.userId, nicknames) ??
-                              getMxIdLocalPart(replyDraft.userId) ??
-                              replyDraft.userId}
-                          </b>
-                        </Text>
-                      }
+                    <IconButton
+                      onClick={() => {
+                        if (threadRootId) {
+                          setReplyDraft({
+                            userId: mx.getUserId() ?? '',
+                            eventId: threadRootId,
+                            body: '',
+                            relation: { rel_type: RelationType.Thread, event_id: threadRootId },
+                          });
+                          return;
+                        }
+
+                        setReplyDraft(undefined);
+                      }}
+                      variant="SurfaceVariant"
+                      size="300"
+                      radii="300"
                     >
-                      <Text size="T300" truncate>
-                        {trimReplyFromBody(replyDraft.body)}
-                      </Text>
-                    </ReplyLayout>
+                      <Icon src={Icons.Cross} size="50" />
+                    </IconButton>
+                    <Box direction="Row" gap="200" alignItems="Center">
+                      {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
+                      <ReplyLayout
+                        userColor={replyUsernameColor}
+                        username={
+                          <Text size="T300" truncate>
+                            <b>
+                              {getMemberDisplayName(room, replyDraft.userId, nicknames) ??
+                                getMxIdLocalPart(replyDraft.userId) ??
+                                replyDraft.userId}
+                            </b>
+                          </Text>
+                        }
+                      >
+                        <Text size="T300" truncate>
+                          {trimReplyFromBody(replyDraft.body)}
+                        </Text>
+                      </ReplyLayout>
+                    </Box>
                   </Box>
-                </Box>
-              </div>
-            )
+                </div>
+              )}
+            </>
           }
           before={
             <IconButton
