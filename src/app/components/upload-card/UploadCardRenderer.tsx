@@ -25,7 +25,7 @@ function PreviewImage({ fileItem }: PreviewImageProps) {
       style={{
         objectFit: 'contain',
         width: '100%',
-        height: toRem(152),
+        height: toRem(80),
         filter: metadata.markedAsSpoiler ? 'blur(44px)' : undefined,
       }}
       alt={originalFile.name}
@@ -47,7 +47,7 @@ function PreviewVideo({ fileItem }: PreviewVideoProps) {
       style={{
         objectFit: 'contain',
         width: '100%',
-        height: toRem(152),
+        height: toRem(80),
         filter: metadata.markedAsSpoiler ? 'blur(44px)' : undefined,
       }}
       src={fileUrl}
@@ -144,6 +144,8 @@ export function UploadCardRenderer({
   return (
     <UploadCard
       radii="300"
+      compact
+      style={{ width: toRem(200), flexShrink: 0 }}
       before={<Icon src={getFileTypeIcon(Icons, file.type)} />}
       after={
         <>

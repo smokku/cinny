@@ -188,8 +188,9 @@ type MImageProps = {
   content: IImageContent;
   renderImageContent: (props: RenderImageContentProps) => ReactNode;
   outlined?: boolean;
+  fitParent?: boolean;
 };
-export function MImage({ content, renderImageContent, outlined }: MImageProps) {
+export function MImage({ content, renderImageContent, outlined, fitParent }: MImageProps) {
   const imgInfo = content?.info;
   const mxcUrl = content.file?.url ?? content.url;
   if (typeof mxcUrl !== 'string') {
@@ -199,11 +200,17 @@ export function MImage({ content, renderImageContent, outlined }: MImageProps) {
   const height = scaleYDimension(imgInfo?.w || 400, displayWidth, imgInfo?.h || 400);
 
   return (
-    <Attachment outlined={outlined} style={{ width: toRem(displayWidth) }}>
+    <Attachment
+      outlined={outlined}
+      style={{
+        width: fitParent ? '100%' : toRem(displayWidth),
+        height: fitParent ? '100%' : 'auto',
+      }}
+    >
       <AttachmentBox
         style={{
-          width: toRem(displayWidth),
-          height: toRem(height < 48 ? 48 : height),
+          width: fitParent ? '100%' : toRem(displayWidth),
+          height: fitParent ? '100%' : toRem(height < 48 ? 48 : height),
         }}
       >
         {renderImageContent({
@@ -234,8 +241,15 @@ type MVideoProps = {
   renderAsFile: () => ReactNode;
   renderVideoContent: (props: RenderVideoContentProps) => ReactNode;
   outlined?: boolean;
+  fitParent?: boolean;
 };
-export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: MVideoProps) {
+export function MVideo({
+  content,
+  renderAsFile,
+  renderVideoContent,
+  outlined,
+  fitParent,
+}: MVideoProps) {
   const videoInfo = content?.info;
   const mxcUrl = content.file?.url ?? content.url;
   const safeMimeType = getBlobSafeMimeType(videoInfo?.mimetype ?? '');
@@ -253,7 +267,13 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: 
   const filename = content.filename ?? content.body ?? 'Video';
 
   return (
-    <Attachment outlined={outlined} style={{ width: toRem(displayWidth) }}>
+    <Attachment
+      outlined={outlined}
+      style={{
+        width: fitParent ? '100%' : toRem(displayWidth),
+        height: fitParent ? '100%' : 'auto',
+      }}
+    >
       <AttachmentHeader>
         <FileHeader
           body={filename}
@@ -270,8 +290,8 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: 
       </AttachmentHeader>
       <AttachmentBox
         style={{
-          width: toRem(displayWidth),
-          height: toRem(height < 48 ? 48 : height),
+          width: fitParent ? '100%' : toRem(displayWidth),
+          height: fitParent ? '100%' : toRem(height < 48 ? 48 : height),
         }}
       >
         {renderVideoContent({
@@ -299,8 +319,15 @@ type MAudioProps = {
   renderAsFile: () => ReactNode;
   renderAudioContent: (props: RenderAudioContentProps) => ReactNode;
   outlined?: boolean;
+  fitParent?: boolean;
 };
-export function MAudio({ content, renderAsFile, renderAudioContent, outlined }: MAudioProps) {
+export function MAudio({
+  content,
+  renderAsFile,
+  renderAudioContent,
+  outlined,
+  fitParent,
+}: MAudioProps) {
   const audioInfo = content?.info;
   const mxcUrl = content.file?.url ?? content.url;
   const safeMimeType = getBlobSafeMimeType(audioInfo?.mimetype ?? '');
@@ -314,7 +341,10 @@ export function MAudio({ content, renderAsFile, renderAudioContent, outlined }: 
 
   const filename = content.filename ?? content.body ?? 'Audio';
   return (
-    <Attachment outlined={outlined} style={{ width: toRem(400) }}>
+    <Attachment
+      outlined={outlined}
+      style={{ width: fitParent ? '100%' : toRem(400), height: fitParent ? '100%' : 'auto' }}
+    >
       <AttachmentHeader>
         <FileHeader
           body={filename}
@@ -354,8 +384,9 @@ type MFileProps = {
   content: IFileContent;
   renderFileContent: (props: RenderFileContentProps) => ReactNode;
   outlined?: boolean;
+  fitParent?: boolean;
 };
-export function MFile({ content, renderFileContent, outlined }: MFileProps) {
+export function MFile({ content, renderFileContent, outlined, fitParent }: MFileProps) {
   const fileInfo = content?.info;
   const mxcUrl = content.file?.url ?? content.url;
 
@@ -364,7 +395,10 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
   }
 
   return (
-    <Attachment outlined={outlined} style={{ width: toRem(400) }}>
+    <Attachment
+      outlined={outlined}
+      style={{ width: fitParent ? '100%' : toRem(400), height: fitParent ? '100%' : 'auto' }}
+    >
       <AttachmentHeader>
         <FileHeader
           body={content.filename ?? content.body ?? 'Unnamed File'}

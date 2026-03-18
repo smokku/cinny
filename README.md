@@ -16,6 +16,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
 - Dedicated threads sidebar user interface.
+- Inline media galleries.
 - Extended user profiles, banners, nicknames, and extended presence handling.
 - Set user presence using User Menu.
 - Show user presence on sidebar avatar.

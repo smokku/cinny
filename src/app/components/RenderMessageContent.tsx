@@ -30,10 +30,9 @@ import { ImageViewer } from './image-viewer';
 import { PdfViewer } from './Pdf-viewer';
 import { TextViewer } from './text-viewer';
 import { testMatrixTo } from '../plugins/matrix-to';
-import { IImageContent } from '../../types/matrix/common';
-import { useSetting } from '../state/hooks/settings';
-import { UrlPreviewSize, settingsAtom } from '../state/settings';
-import { ClientSideHoverFreeze } from './ClientSideHoverFreeze';
+import { GALLERY_MSGTYPE, IGalleryContent, IImageContent } from '../../types/matrix/common';
+import { MGallery } from './message/MGallery';
+import { UrlPreviewSize } from '../state/settings';
 
 type RenderMessageContentProps = {
   displayName: string;
@@ -48,6 +47,7 @@ type RenderMessageContentProps = {
   htmlReactParserOptions: HTMLReactParserOptions;
   linkifyOpts: Opts;
   outlineAttachment?: boolean;
+  fitParent?: boolean;
 };
 export function RenderMessageContent({
   displayName,
@@ -62,6 +62,7 @@ export function RenderMessageContent({
   htmlReactParserOptions,
   linkifyOpts,
   outlineAttachment,
+  fitParent,
 }: RenderMessageContentProps) {
   const renderUrlsPreview = (urls: string[]) => {
     const filteredUrls = urls.filter((url) => !testMatrixTo(url));
@@ -128,6 +129,7 @@ export function RenderMessageContent({
           </FileContent>
         )}
         outlined={outlineAttachment}
+        fitParent={fitParent}
       />
       {renderCaption()}
     </>
@@ -204,6 +206,7 @@ export function RenderMessageContent({
             />
           )}
           outlined={outlineAttachment}
+          fitParent={fitParent}
         />
         {renderCaption()}
       </>
@@ -237,6 +240,7 @@ export function RenderMessageContent({
             />
           )}
           outlined={outlineAttachment}
+          fitParent={fitParent}
         />
         {renderCaption()}
       </>
@@ -253,6 +257,7 @@ export function RenderMessageContent({
             <AudioContent {...props} renderMediaControl={(p) => <MediaControl {...p} />} />
           )}
           outlined={outlineAttachment}
+          fitParent={fitParent}
         />
         {renderCaption()}
       </>
@@ -265,6 +270,51 @@ export function RenderMessageContent({
 
   if (msgType === MsgType.Location) {
     return <MLocation content={getContent()} />;
+  }
+
+  if (msgType === GALLERY_MSGTYPE) {
+    const galleryContent: IGalleryContent = getContent();
+    return (
+      <MGallery
+        content={galleryContent}
+        renderItem={(itemContent) => (
+          <RenderMessageContent
+            displayName={displayName}
+            msgType={itemContent.msgtype as string}
+            ts={ts}
+            getContent={<T,>() => itemContent as T}
+            mediaAutoLoad={mediaAutoLoad}
+            urlPreview={urlPreview}
+            urlPreviewSize={urlPreviewSize}
+            highlightRegex={highlightRegex}
+            htmlReactParserOptions={htmlReactParserOptions}
+            linkifyOpts={linkifyOpts}
+            outlineAttachment={outlineAttachment}
+            fitParent
+          />
+        )}
+        renderCaption={
+          galleryContent.body
+            ? () => (
+                <MText
+                  style={{ marginTop: config.space.S200 }}
+                  edited={edited}
+                  content={galleryContent}
+                  renderBody={(props) => (
+                    <RenderBody
+                      {...props}
+                      highlightRegex={highlightRegex}
+                      htmlReactParserOptions={htmlReactParserOptions}
+                      linkifyOpts={linkifyOpts}
+                    />
+                  )}
+                  renderUrlsPreview={urlPreview ? renderUrlsPreview : undefined}
+                />
+              )
+            : undefined
+        }
+      />
+    );
   }
 
   if (msgType === 'm.bad.encrypted') {
