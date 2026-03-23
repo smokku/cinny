@@ -21,6 +21,7 @@ import {
   ReadTextFile,
   RenderBody,
   ThumbnailContent,
+  BrokenContent,
   UnsupportedContent,
   VideoContent,
 } from './message';
@@ -134,6 +135,10 @@ export function RenderMessageContent({
       {renderCaption()}
     </>
   );
+
+  if (!msgType) {
+    return <BrokenContent />;
+  }
 
   if (msgType === MsgType.Text) {
     return (
