@@ -4,6 +4,8 @@ import { Box, as } from 'folds';
 import * as css from './UrlPreview.css';
 import { UrlPreviewSize } from '../../state/settings';
 
+export const URL_PREVIEW_IMG_MAX_HEIGHT = 300;
+
 export const UrlPreview = as<'div'>(({ className, ...props }, ref) => (
   <Box shrink="No" className={classNames(css.UrlPreview, className)} {...props} ref={ref} />
 ));
@@ -19,7 +21,7 @@ export const UrlPreviewImg = as<
         style: {
           width: '100%',
           height: '100%',
-          maxHeight: '300px',
+          maxHeight: `${URL_PREVIEW_IMG_MAX_HEIGHT}px`,
           objectFit,
           objectPosition: 'center',
           justifyContent: 'center',
