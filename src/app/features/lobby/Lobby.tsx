@@ -428,7 +428,7 @@ export function Lobby() {
     closedCategories.has(categoryId)
   );
 
-  const handleOpenRoom: MouseEventHandler<HTMLButtonElement> = (evt) => {
+  const handleOpenRoom: MouseEventHandler<HTMLElement> = (evt) => {
     const rId = evt.currentTarget.getAttribute('data-room-id');
     if (!rId) return;
     const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(mx, space.roomId);

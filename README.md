@@ -34,6 +34,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Replaced the sidebar Settings button with a user menu.
 - Discord-like message-reply layout and hover behavior.
   - Move the message context outside of message content.
+- Join rooms in Lobby by clicking the row
 
 ## Fixed
 
