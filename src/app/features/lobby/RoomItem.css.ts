@@ -11,6 +11,9 @@ export const RoomItemCard = style({
     },
   },
 });
+export const RoomProfileClickable = style({
+  cursor: 'pointer',
+});
 export const RoomProfileTopic = style({
   cursor: 'pointer',
   ':hover': {
