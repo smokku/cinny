@@ -7,7 +7,13 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useSetting } from '../../state/hooks/settings';
 import { UrlPreviewSize, settingsAtom } from '../../state/settings';
 
-import { UrlPreview, UrlPreviewContent, UrlPreviewDescription, UrlPreviewImg } from './UrlPreview';
+import {
+  UrlPreview,
+  UrlPreviewContent,
+  UrlPreviewDescription,
+  UrlPreviewImg,
+  URL_PREVIEW_IMG_MAX_HEIGHT,
+} from './UrlPreview';
 import {
   getIntersectionObserverEntry,
   useIntersectionObserver,
@@ -51,7 +57,14 @@ export const UrlPreviewCard = as<
     );
 
     const imgUrl = mxcUrlToHttp(mx, prev['og:image'] || '', useAuthentication);
-    const isBig = urlPreviewSize !== UrlPreviewSize.Compact;
+
+    const ogHeight = prev['og:image:height'];
+    const effectiveSize =
+      !thumbUrl || (typeof ogHeight === 'number' && ogHeight < URL_PREVIEW_IMG_MAX_HEIGHT)
+        ? UrlPreviewSize.Compact
+        : urlPreviewSize;
+
+    const isBig = effectiveSize !== UrlPreviewSize.Compact;
     const direction = isBig ? 'Column' : 'Row';
 
     return (
@@ -67,7 +80,7 @@ export const UrlPreviewCard = as<
             }}
           >
             <UrlPreviewImg
-              urlPreviewSize={urlPreviewSize}
+              urlPreviewSize={effectiveSize}
               src={thumbUrl}
               alt={prev['og:title']}
               title={prev['og:title']}
