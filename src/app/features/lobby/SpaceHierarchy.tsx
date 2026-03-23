@@ -38,7 +38,7 @@ type SpaceHierarchyProps = {
   pinned: boolean;
   togglePinToSidebar: (roomId: string) => void;
   onSpacesFound: (spaceItems: IHierarchyRoom[]) => void;
-  onOpenRoom: MouseEventHandler<HTMLButtonElement>;
+  onOpenRoom: MouseEventHandler<HTMLElement>;
 };
 export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
   (

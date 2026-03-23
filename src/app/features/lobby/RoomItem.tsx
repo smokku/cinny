@@ -183,6 +183,8 @@ type RoomProfileProps = {
   memberCount?: number;
   joinRule?: JoinRule;
   options?: ReactNode;
+  onClick?: MouseEventHandler<HTMLElement>;
+  'data-room-id'?: string;
 };
 function RoomProfile({
   roomId,
@@ -194,9 +196,20 @@ function RoomProfile({
   memberCount,
   joinRule,
   options,
+  onClick,
+  'data-room-id': dataRoomId,
 }: RoomProfileProps) {
   return (
-    <Box grow="Yes" gap="300">
+    <Box
+      className={onClick ? css.RoomProfileClickable : undefined}
+      grow="Yes"
+      gap="300"
+      onClick={onClick}
+      data-room-id={dataRoomId}
+      tabIndex={onClick ? 0 : undefined}
+      role={onClick ? 'button' : undefined}
+      onKeyDown={onClick ? onEnterOrSpace(onClick) : undefined}
+    >
       <Avatar>
         <RoomAvatar
           roomId={roomId}
@@ -241,8 +254,14 @@ function RoomProfile({
                     size="T200"
                     priority="300"
                     truncate
-                    onClick={() => setView(true)}
-                    onKeyDown={onEnterOrSpace(() => setView(true))}
+                    onClick={(evt) => {
+                      evt.stopPropagation();
+                      setView(true);
+                    }}
+                    onKeyDown={onEnterOrSpace<React.KeyboardEvent>((evt) => {
+                      evt.stopPropagation();
+                      setView(true);
+                    })}
                     tabIndex={0}
                   >
                     {topic}
@@ -284,7 +303,7 @@ type RoomItemCardProps = {
   dm?: boolean;
   firstChild?: boolean;
   lastChild?: boolean;
-  onOpen: MouseEventHandler<HTMLButtonElement>;
+  onOpen: MouseEventHandler<HTMLElement>;
   options?: ReactNode;
   before?: ReactNode;
   after?: ReactNode;
@@ -349,6 +368,8 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   memberCount={localSummary.memberCount}
                   suggested={content.suggested}
                   joinRule={localSummary.joinRule}
+                  onClick={joined ? onOpen : undefined}
+                  data-room-id={roomId}
                   options={
                     joined ? (
                       <Box shrink="No" gap="100" alignItems="Center">
