@@ -1781,6 +1781,48 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           </Event>
         );
       },
+      [StateEvent.RoomBanner]: (mEventId, mEvent, item) => {
+        const highlighted = focusItem?.index === item && focusItem.highlight;
+        const senderId = mEvent.getSender() ?? '';
+
+        const timeJSX = (
+          <Time
+            ts={mEvent.getTs()}
+            compact={messageLayout === MessageLayout.Compact}
+            hour24Clock={hour24Clock}
+            dateFormatString={dateFormatString}
+          />
+        );
+
+        return (
+          <Event
+            key={mEvent.getId()}
+            data-message-item={item}
+            data-message-id={mEventId}
+            room={room}
+            mEvent={mEvent}
+            highlight={highlighted}
+            messageSpacing={messageSpacing}
+            canDelete={canRedact || mEvent.getSender() === mx.getUserId()}
+            hideReadReceipts={hideActivity}
+            showDeveloperTools={showDeveloperTools}
+          >
+            <EventContent
+              messageLayout={messageLayout}
+              time={timeJSX}
+              iconSrc={Icons.Hash}
+              content={
+                <Box grow="Yes" direction="Column">
+                  <Text size="T300" priority="300">
+                    <UserLink userId={senderId} onClick={mentionClickHandler} />
+                    {' changed room banner'}
+                  </Text>
+                </Box>
+              }
+            />
+          </Event>
+        );
+      },
       [StateEvent.GroupCallMemberPrefix]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';

@@ -4,6 +4,7 @@ import {
   Button,
   Chip,
   color,
+  config,
   Icon,
   Icons,
   Input,
@@ -21,6 +22,7 @@ import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { useRoom } from '../../../hooks/useRoom';
 import {
   useRoomAvatar,
+  useRoomBanner,
   useRoomJoinRule,
   useRoomName,
   useRoomTopic,
@@ -43,18 +45,22 @@ import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
+  canEditBanner: boolean;
   canEditName: boolean;
   canEditTopic: boolean;
   avatar?: string;
+  banner?: string;
   name: string;
   topic: string;
   onClose: () => void;
 };
 export function RoomProfileEdit({
   canEditAvatar,
+  canEditBanner,
   canEditName,
   canEditTopic,
   avatar,
+  banner,
   name,
   topic,
   onClose,
@@ -89,12 +95,47 @@ export function RoomProfileEdit({
     setRoomAvatar(upload.mxc);
   }, []);
 
+  const [roomBanner, setRoomBanner] = useState(banner);
+
+  const bannerUrl = roomBanner
+    ? mxcUrlToHttp(mx, roomBanner, useAuthentication) ?? undefined
+    : undefined;
+
+  const [bannerImageFile, setBannerImageFile] = useState<File>();
+  const bannerFileUrl = useObjectURL(bannerImageFile);
+  const uploadingBanner = bannerFileUrl ? roomBanner === banner : false;
+  const bannerUploadAtom = useMemo(() => {
+    if (bannerImageFile) return createUploadAtom(bannerImageFile);
+    return undefined;
+  }, [bannerImageFile]);
+
+  const pickBannerFile = useFilePicker(setBannerImageFile, false);
+
+  const handleRemoveBannerUpload = useCallback(() => {
+    setBannerImageFile(undefined);
+    setRoomBanner(banner);
+  }, [banner]);
+
+  const handleBannerUploaded = useCallback((upload: UploadSuccess) => {
+    setRoomBanner(upload.mxc);
+  }, []);
+
   const [submitState, submit] = useAsyncCallback(
     useCallback(
-      async (roomAvatarMxc?: string | null, roomName?: string, roomTopic?: string) => {
+      async (
+        roomAvatarMxc?: string | null,
+        roomBannerMxc?: string | null,
+        roomName?: string,
+        roomTopic?: string
+      ) => {
         if (roomAvatarMxc !== undefined) {
           await mx.sendStateEvent(room.roomId, StateEvent.RoomAvatar as any, {
             url: roomAvatarMxc,
+          });
+        }
+        if (roomBannerMxc !== undefined) {
+          await mx.sendStateEvent(room.roomId, StateEvent.RoomBanner as any, {
+            ...(roomBannerMxc ? { url: roomBannerMxc } : {}),
           });
         }
         if (roomName !== undefined) {
@@ -111,7 +152,7 @@ export function RoomProfileEdit({
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
-    if (uploadingAvatar) return;
+    if (uploadingAvatar || uploadingBanner) return;
 
     const target = evt.target as HTMLFormElement | undefined;
     const nameInput = target?.nameInput as HTMLInputElement | undefined;
@@ -121,12 +162,18 @@ export function RoomProfileEdit({
     const roomName = nameInput.value.trim();
     const roomTopic = topicTextArea.value.trim();
 
-    if (roomAvatar === avatar && roomName === name && roomTopic === topic) {
+    if (
+      roomAvatar === avatar &&
+      roomBanner === banner &&
+      roomName === name &&
+      roomTopic === topic
+    ) {
       return;
     }
 
     submit(
       roomAvatar === avatar ? undefined : roomAvatar || null,
+      roomBanner === banner ? undefined : roomBanner || null,
       roomName === name ? undefined : roomName,
       roomTopic === topic ? undefined : roomTopic
     ).then(() => {
@@ -138,6 +185,82 @@ export function RoomProfileEdit({
 
   return (
     <Box as="form" onSubmit={handleSubmit} direction="Column" gap="400">
+      <Box direction="Column" gap="100">
+        <Text size="L400">Banner</Text>
+        <Box
+          style={{
+            height: '100px',
+            width: '100%',
+            borderRadius: config.radii.R400,
+            overflow: 'hidden',
+            backgroundColor: color.SurfaceVariant.Container,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {bannerUrl ? (
+            <img
+              src={bannerUrl}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              alt="Banner Preview"
+            />
+          ) : (
+            <Text priority="300" size="T200">
+              No Banner Set
+            </Text>
+          )}
+        </Box>
+        {bannerUploadAtom ? (
+          <Box gap="200" direction="Column">
+            <CompactUploadCardRenderer
+              uploadAtom={bannerUploadAtom}
+              onRemove={handleRemoveBannerUpload}
+              onComplete={handleBannerUploaded}
+            />
+          </Box>
+        ) : (
+          <Box gap="200">
+            <Button
+              type="button"
+              size="300"
+              variant="Secondary"
+              fill="Soft"
+              radii="300"
+              disabled={!canEditBanner || submitting}
+              onClick={() => pickBannerFile('image/*')}
+            >
+              <Text size="B300">Upload</Text>
+            </Button>
+            {!roomBanner && banner && (
+              <Button
+                type="button"
+                size="300"
+                variant="Success"
+                fill="None"
+                radii="300"
+                disabled={!canEditBanner || submitting}
+                onClick={() => setRoomBanner(banner)}
+              >
+                <Text size="B300">Reset</Text>
+              </Button>
+            )}
+            {roomBanner && (
+              <Button
+                type="button"
+                size="300"
+                variant="Critical"
+                fill="None"
+                radii="300"
+                disabled={!canEditBanner || submitting}
+                onClick={() => setRoomBanner(undefined)}
+              >
+                <Text size="B300">Remove</Text>
+              </Button>
+            )}
+          </Box>
+        )}
+      </Box>
       <Box gap="400">
         <Box grow="Yes" direction="Column" gap="100">
           <Text size="L400">Avatar</Text>
@@ -240,7 +363,7 @@ export function RoomProfileEdit({
           variant="Success"
           size="300"
           radii="300"
-          disabled={uploadingAvatar || submitting}
+          disabled={uploadingAvatar || uploadingBanner || submitting}
           before={submitting && <Spinner size="100" variant="Success" fill="Solid" />}
         >
           <Text size="B300">Save</Text>
@@ -270,17 +393,23 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const directs = useAtomValue(mDirectAtom);
 
   const avatar = useRoomAvatar(room, directs.has(room.roomId));
+  const banner = useRoomBanner(room);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const joinRule = useRoomJoinRule(room);
 
   const canEditAvatar = permissions.stateEvent(StateEvent.RoomAvatar, mx.getSafeUserId());
+  const canEditBanner = permissions.stateEvent(StateEvent.RoomBanner, mx.getSafeUserId());
   const canEditName = permissions.stateEvent(StateEvent.RoomName, mx.getSafeUserId());
   const canEditTopic = permissions.stateEvent(StateEvent.RoomTopic, mx.getSafeUserId());
-  const canEdit = canEditAvatar || canEditName || canEditTopic;
+  const canEdit = canEditAvatar || canEditBanner || canEditName || canEditTopic;
 
   const avatarUrl = avatar
     ? mxcUrlToHttp(mx, avatar, useAuthentication, 96, 96, 'crop') ?? undefined
+    : undefined;
+
+  const viewBannerUrl = banner
+    ? mxcUrlToHttp(mx, banner, useAuthentication) ?? undefined
     : undefined;
 
   const [edit, setEdit] = useState(false);
@@ -299,59 +428,79 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
         {edit ? (
           <RoomProfileEdit
             canEditAvatar={canEditAvatar}
+            canEditBanner={canEditBanner}
             canEditName={canEditName}
             canEditTopic={canEditTopic}
             avatar={avatar}
+            banner={banner}
             name={name ?? ''}
             topic={topic ?? ''}
             onClose={handleCloseEdit}
           />
         ) : (
-          <Box gap="400">
-            <Box grow="Yes" direction="Column" gap="300">
-              <Box direction="Column" gap="100">
-                <Text className={BreakWord} size="H5">
-                  {name ?? 'Unknown'}
-                </Text>
-                {topic && (
-                  <Text className={classNames(BreakWord, LineClamp3)} size="T200">
-                    <Linkify options={LINKIFY_OPTS}>{topic}</Linkify>
+          <>
+            {viewBannerUrl && (
+              <Box
+                style={{
+                  height: '100px',
+                  width: '100%',
+                  borderRadius: config.radii.R400,
+                  overflow: 'hidden',
+                }}
+              >
+                <img
+                  src={viewBannerUrl}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  alt="Room Banner"
+                />
+              </Box>
+            )}
+            <Box gap="400">
+              <Box grow="Yes" direction="Column" gap="300">
+                <Box direction="Column" gap="100">
+                  <Text className={BreakWord} size="H5">
+                    {name ?? 'Unknown'}
                   </Text>
+                  {topic && (
+                    <Text className={classNames(BreakWord, LineClamp3)} size="T200">
+                      <Linkify options={LINKIFY_OPTS}>{topic}</Linkify>
+                    </Text>
+                  )}
+                </Box>
+                {canEdit && (
+                  <Box gap="200">
+                    <Chip
+                      variant="Secondary"
+                      fill="Soft"
+                      radii="300"
+                      before={<Icon size="50" src={Icons.Pencil} />}
+                      onClick={() => setEdit(true)}
+                      outlined
+                    >
+                      <Text size="B300">Edit</Text>
+                    </Chip>
+                  </Box>
                 )}
               </Box>
-              {canEdit && (
-                <Box gap="200">
-                  <Chip
-                    variant="Secondary"
-                    fill="Soft"
-                    radii="300"
-                    before={<Icon size="50" src={Icons.Pencil} />}
-                    onClick={() => setEdit(true)}
-                    outlined
-                  >
-                    <Text size="B300">Edit</Text>
-                  </Chip>
-                </Box>
-              )}
+              <Box shrink="No">
+                <Avatar size="500" radii="300">
+                  <RoomAvatar
+                    roomId={room.roomId}
+                    src={avatarUrl}
+                    alt={name}
+                    renderFallback={() => (
+                      <RoomIcon
+                        roomType={room.getType()}
+                        size="400"
+                        joinRule={joinRule?.join_rule ?? JoinRule.Invite}
+                        filled
+                      />
+                    )}
+                  />
+                </Avatar>
+              </Box>
             </Box>
-            <Box shrink="No">
-              <Avatar size="500" radii="300">
-                <RoomAvatar
-                  roomId={room.roomId}
-                  src={avatarUrl}
-                  alt={name}
-                  renderFallback={() => (
-                    <RoomIcon
-                      roomType={room.getType()}
-                      size="400"
-                      joinRule={joinRule?.join_rule ?? JoinRule.Invite}
-                      filled
-                    />
-                  )}
-                />
-              </Avatar>
-            </Box>
-          </Box>
+          </>
         )}
       </SequenceCard>
     </Box>
