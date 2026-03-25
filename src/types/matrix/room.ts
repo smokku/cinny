@@ -91,6 +91,12 @@ export type Unread = {
   from: Set<string> | null;
 };
 export type RoomToUnread = Map<string, Unread>;
+export type ThreadUnread = {
+  total: number;
+  highlight: number;
+  order: number;
+};
+export type RoomToThreadUnread = Map<string, Map<string, ThreadUnread>>;
 export type UnreadInfo = {
   roomId: string;
   total: number;

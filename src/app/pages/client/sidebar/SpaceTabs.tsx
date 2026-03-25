@@ -78,9 +78,8 @@ import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useOpenedSidebarFolderAtom } from '../../../state/hooks/openedSidebarFolder';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
-import { useRoomsUnread } from '../../../state/hooks/unread';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import { markAsRead } from '../../../utils/notifications';
+import { useRoomsCombinedUnread } from '../../../state/hooks/unread';
+import { markAsReadScope } from '../../../utils/notifications';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
@@ -118,10 +117,10 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
       room.roomId,
       useRecursiveChildScopeFactory(mx, roomToParents)
     );
-    const unread = useRoomsUnread(allChild, roomToUnreadAtom);
+    const unread = useRoomsCombinedUnread(allChild);
 
     const handleMarkAsRead = () => {
-      allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
+      allChild.forEach((childRoomId) => markAsReadScope(mx, childRoomId, hideActivity));
       requestClose();
     };
 
