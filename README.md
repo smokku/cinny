@@ -16,6 +16,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
 - Dedicated threads sidebar user interface.
+- Unread threads on the room list sidebar.
 - Inline media galleries.
 - Extended user profiles, banners, nicknames, and extended presence handling.
 - Set user presence using User Menu.
@@ -68,7 +69,7 @@ A Matrix client focusing primarily on simple, elegant and secure interface. The 
 - [Roadmap](https://github.com/orgs/cinnyapp/projects/1)
 - [Contributing](./CONTRIBUTING.md)
 
-> [!IMPORTANT] 
+> [!IMPORTANT]
 We are currently in the [process of replacing the matrix-js-sdk](https://github.com/cinnyapp/cinny/issues/257#issuecomment-3714406704) with our own SDK. As a result, we will not be accepting any pull requests until further notice.
 Thank you for your understanding.
 

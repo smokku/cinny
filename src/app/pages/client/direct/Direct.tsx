@@ -33,16 +33,15 @@ import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomNavCategoryButton, RoomWithThreads } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useDirectRooms } from './useDirectRooms';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
-import { useRoomsUnread } from '../../../state/hooks/unread';
-import { markAsRead } from '../../../utils/notifications';
+import { useRoomsCombinedUnread } from '../../../state/hooks/unread';
+import { markAsReadScope } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -51,6 +50,7 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
+import { roomToThreadUnreadAtom, roomToUnreadAtom } from '../../../state/room/roomToUnread';
 
 type DirectMenuProps = {
   requestClose: () => void;
@@ -59,11 +59,11 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const orphanRooms = useDirectRooms();
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const unread = useRoomsCombinedUnread(orphanRooms);
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsRead(mx, rId, hideActivity));
+    orphanRooms.forEach((rId) => markAsReadScope(mx, rId, hideActivity));
     requestClose();
   };
 
@@ -175,6 +175,7 @@ export function Direct() {
   const directs = useDirectRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
   const navigate = useNavigate();
 
   const createDirectSelected = useDirectCreateSelected();
@@ -186,10 +187,12 @@ export function Direct() {
   const sortedDirects = useMemo(() => {
     const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
-      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+      return items.filter(
+        (rId) => roomToUnread.has(rId) || roomToThreadUnread.has(rId) || rId === selectedRoomId
+      );
     }
     return items;
-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, directs, closedCategories, roomToUnread, roomToThreadUnread, selectedRoomId]);
 
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
@@ -256,7 +259,7 @@ export function Direct() {
                       key={vItem.index}
                       ref={virtualizer.measureElement}
                     >
-                      <RoomNavItem
+                      <RoomWithThreads
                         room={room}
                         selected={selected}
                         showAvatar

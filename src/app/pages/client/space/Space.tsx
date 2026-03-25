@@ -47,9 +47,8 @@ import {
 } from '../../../hooks/router/useSelectedSpace';
 import { useSpace } from '../../../hooks/useSpace';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomNavCategoryButton, RoomWithThreads } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
@@ -59,8 +58,8 @@ import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
-import { markAsRead } from '../../../utils/notifications';
-import { useRoomsUnread } from '../../../state/hooks/unread';
+import { markAsReadScope } from '../../../utils/notifications';
+import { useRoomsCombinedUnread } from '../../../state/hooks/unread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../../components/leave-space-prompt';
 import { copyToClipboard } from '../../../utils/dom';
@@ -112,10 +111,10 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
     room.roomId,
     useRecursiveChildScopeFactory(mx, roomToParents)
   );
-  const unread = useRoomsUnread(allChild, roomToUnreadAtom);
+  const unread = useRoomsCombinedUnread(allChild);
 
   const handleMarkAsRead = () => {
-    allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
+    allChild.forEach((childRoomId) => markAsReadScope(mx, childRoomId, hideActivity));
     requestClose();
   };
 
@@ -380,6 +379,7 @@ export function Space() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mDirects = useAtomValue(mDirectAtom);
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
   const notificationPreferences = useRoomsNotificationPreferencesContext();
@@ -411,10 +411,13 @@ export function Space() {
           return false;
         }
         const showRoomAnyway =
-          roomToUnread.has(roomId) || roomId === selectedRoomId || callEmbed?.roomId === roomId;
+          roomToUnread.has(roomId) ||
+          roomToThreadUnread.has(roomId) ||
+          roomId === selectedRoomId ||
+          callEmbed?.roomId === roomId;
         return !showRoomAnyway;
       },
-      [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
+      [space.roomId, closedCategories, roomToUnread, roomToThreadUnread, selectedRoomId, callEmbed]
     ),
     useCallback(
       (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),
@@ -518,7 +521,7 @@ export function Space() {
 
               return (
                 <VirtualTile virtualItem={vItem} key={vItem.index} ref={virtualizer.measureElement}>
-                  <RoomNavItem
+                  <RoomWithThreads
                     room={room}
                     selected={selectedRoomId === roomId}
                     showAvatar={mDirects.has(roomId)}
