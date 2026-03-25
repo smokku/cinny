@@ -50,6 +50,7 @@ export function UserHero({ userId, avatarUrl, bannerUrl, presence }: UserHeroPro
       src={coverUrl}
       alt={`${userId} cover`}
       draggable="false"
+      decoding="async"
     />
   );
 
