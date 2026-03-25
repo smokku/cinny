@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
+import { nicknamesAtom } from '../state/nicknames';
 
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
@@ -41,6 +43,22 @@ export const useRoomName = (room: Room): string => {
   }, [room]);
 
   return name;
+};
+
+export const useRoomNickname = (room: Room, direct?: boolean): string => {
+  const sdkName = useRoomName(room);
+  const nicknames = useAtomValue(nicknamesAtom);
+
+  return useMemo(() => {
+    if (direct) {
+      const other = room.getAvatarFallbackMember();
+      if (other) {
+        const nick = nicknames?.[other.userId];
+        if (nick) return nick;
+      }
+    }
+    return sdkName;
+  }, [direct, room, sdkName, nicknames]);
 };
 
 export const useRoomTopic = (room: Room): string | undefined => {

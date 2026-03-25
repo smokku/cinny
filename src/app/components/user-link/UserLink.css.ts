@@ -1,6 +1,6 @@
 import { style } from '@vanilla-extract/css';
 
-export const MemberEventUserLink = style({
+export const UserLink = style({
   color: 'inherit',
   textDecoration: 'none',
   selectors: {
