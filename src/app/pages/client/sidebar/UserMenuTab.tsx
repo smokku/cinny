@@ -61,13 +61,13 @@ export function UserMenuTab() {
     ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
   const heroAvatarUrl = profile.avatarUrl
-    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication) ?? undefined
+    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 160, 160, 'crop') ?? undefined
     : undefined;
 
   const parsedBanner =
     typeof profile.bannerUrl === 'string' ? profile.bannerUrl.replace(/^"|"$/g, '') : undefined;
   const heroBannerUrl = parsedBanner
-    ? mxcUrlToHttp(mx, parsedBanner, useAuthentication) ?? undefined
+    ? mxcUrlToHttp(mx, parsedBanner, useAuthentication, 640, 192, 'scale') ?? undefined
     : undefined;
 
   const currentPresence = presence?.presence ?? Presence.Online;

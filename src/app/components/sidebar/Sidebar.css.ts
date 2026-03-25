@@ -13,6 +13,7 @@ export const Sidebar = style([
     display: 'flex',
     flexDirection: 'column',
     color: color.Background.OnContainer,
+    contain: 'content',
   },
 ]);
 
@@ -73,6 +74,7 @@ export const SidebarItem = recipe({
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
+      willChange: 'transform',
       transition: 'transform 200ms cubic-bezier(0, 0.8, 0.67, 0.97)',
 
       selectors: {
