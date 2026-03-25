@@ -2,11 +2,9 @@ import React, { ReactEventHandler, ReactNode } from 'react';
 import { IconSrc, Icons } from 'folds';
 import { MatrixEvent } from 'matrix-js-sdk';
 import { IMemberContent, Membership } from '../../types/matrix/room';
-import { makeMentionCustomProps } from '../plugins/react-custom-html-parser';
-import { getMatrixToUser } from '../plugins/matrix-to';
 import { getMxIdLocalPart } from '../utils/matrix';
 import { isMembershipChanged } from '../utils/room';
-import * as css from './useMemberEventParser.css';
+import { UserLink } from '../components/user-link';
 
 export type ParsedResult = {
   icon: IconSrc;
@@ -18,17 +16,6 @@ export type MemberEventParser = (mEvent: MatrixEvent) => ParsedResult;
 export const useMemberEventParser = (
   handleMentionClick?: ReactEventHandler<HTMLElement>
 ): MemberEventParser => {
-  const renderUserLink = (id: string, name: string) => (
-    <a
-      href={getMatrixToUser(id)}
-      {...makeMentionCustomProps(handleMentionClick)}
-      className={css.MemberEventUserLink}
-      data-mention-id={id}
-    >
-      <b>{name}</b>
-    </a>
-  );
-
   const parseMemberEvent: MemberEventParser = (mEvent) => {
     const content = mEvent.getContent<IMemberContent>();
     const prevContent = mEvent.getPrevContent() as IMemberContent;
@@ -42,13 +29,6 @@ export const useMemberEventParser = (
         body: 'Broken membership event',
       };
 
-    const senderName = getMxIdLocalPart(senderId) ?? senderId;
-    const userNameFromId = getMxIdLocalPart(userId) ?? userId;
-    const userName =
-      typeof content.displayname === 'string'
-        ? content.displayname || userNameFromId
-        : userNameFromId;
-
     if (isMembershipChanged(mEvent)) {
       if (content.membership === Membership.Invite) {
         if (prevContent.membership === Membership.Knock) {
@@ -56,9 +36,9 @@ export const useMemberEventParser = (
             icon: Icons.ArrowGoRightPlus,
             body: (
               <>
-                <b>{senderName}</b>
+                <UserLink userId={senderId} onClick={handleMentionClick} />
                 {' accepted '}
-                <b>{userName}</b>
+                <UserLink userId={userId} forceName={userId} onClick={handleMentionClick} />
                 {`'s join request `}
                 {reason}
               </>
@@ -70,9 +50,9 @@ export const useMemberEventParser = (
           icon: Icons.ArrowGoRightPlus,
           body: (
             <>
-              <b>{senderName}</b>
+              <UserLink userId={senderId} onClick={handleMentionClick} />
               {' invited '}
-              <b>{userName}</b> {reason}
+              <UserLink userId={userId} forceName={userId} onClick={handleMentionClick} /> {reason}
             </>
           ),
         };
@@ -83,7 +63,7 @@ export const useMemberEventParser = (
           icon: Icons.ArrowGoRightPlus,
           body: (
             <>
-              <b>{userName}</b>
+              <UserLink userId={userId} forceName={userId} onClick={handleMentionClick} />
               {' request to join room '}
               {reason}
             </>
@@ -96,7 +76,7 @@ export const useMemberEventParser = (
           icon: Icons.ArrowGoRight,
           body: (
             <>
-              {renderUserLink(userId, userName)}
+              <UserLink userId={userId} onClick={handleMentionClick} />
               {' joined the room'}
             </>
           ),
@@ -110,15 +90,15 @@ export const useMemberEventParser = (
             body:
               senderId === userId ? (
                 <>
-                  <b>{userName}</b>
+                  <UserLink userId={userId} onClick={handleMentionClick} />
                   {' rejected the invitation '}
                   {reason}
                 </>
               ) : (
                 <>
-                  <b>{senderName}</b>
+                  <UserLink userId={senderId} onClick={handleMentionClick} />
                   {' rejected '}
-                  <b>{userName}</b>
+                  <UserLink userId={userId} onClick={handleMentionClick} />
                   {`'s join request `}
                   {reason}
                 </>
@@ -132,15 +112,15 @@ export const useMemberEventParser = (
             body:
               senderId === userId ? (
                 <>
-                  <b>{userName}</b>
+                  <UserLink userId={userId} onClick={handleMentionClick} />
                   {' revoked joined request '}
                   {reason}
                 </>
               ) : (
                 <>
-                  <b>{senderName}</b>
+                  <UserLink userId={senderId} onClick={handleMentionClick} />
                   {' revoked '}
-                  <b>{userName}</b>
+                  <UserLink userId={userId} onClick={handleMentionClick} />
                   {`'s invite `}
                   {reason}
                 </>
@@ -153,9 +133,9 @@ export const useMemberEventParser = (
             icon: Icons.ArrowGoLeft,
             body: (
               <>
-                <b>{senderName}</b>
+                <UserLink userId={senderId} onClick={handleMentionClick} />
                 {' unbanned '}
-                <b>{userName}</b> {reason}
+                <UserLink userId={userId} onClick={handleMentionClick} /> {reason}
               </>
             ),
           };
@@ -166,15 +146,15 @@ export const useMemberEventParser = (
           body:
             senderId === userId ? (
               <>
-                {renderUserLink(userId, userName)}
+                <UserLink userId={userId} onClick={handleMentionClick} />
                 {' left the room '}
                 {reason}
               </>
             ) : (
               <>
-                <b>{senderName}</b>
+                <UserLink userId={senderId} onClick={handleMentionClick} />
                 {' kicked '}
-                <b>{userName}</b> {reason}
+                <UserLink userId={userId} onClick={handleMentionClick} /> {reason}
               </>
             ),
         };
@@ -185,9 +165,9 @@ export const useMemberEventParser = (
           icon: Icons.ArrowGoLeft,
           body: (
             <>
-              <b>{senderName}</b>
+              <UserLink userId={senderId} onClick={handleMentionClick} />
               {' banned '}
-              <b>{userName}</b> {reason}
+              <UserLink userId={userId} onClick={handleMentionClick} /> {reason}
             </>
           ),
         };
@@ -197,21 +177,21 @@ export const useMemberEventParser = (
     if (content.displayname !== prevContent.displayname) {
       const prevUserName =
         typeof prevContent.displayname === 'string'
-          ? prevContent.displayname || userNameFromId
-          : userNameFromId;
+          ? prevContent.displayname || (getMxIdLocalPart(userId) ?? userId)
+          : getMxIdLocalPart(userId) ?? userId;
 
       return {
         icon: Icons.Mention,
         body:
           typeof content.displayname === 'string' ? (
             <>
-              <b>{prevUserName}</b>
+              <UserLink userId={userId} forceName={prevUserName} onClick={handleMentionClick} />
               {' changed display name to '}
-              <b>{userName}</b>
+              <b>{content.displayname}</b>
             </>
           ) : (
             <>
-              <b>{prevUserName}</b>
+              <UserLink userId={userId} forceName={prevUserName} onClick={handleMentionClick} />
               {' removed their display name '}
             </>
           ),
@@ -223,12 +203,12 @@ export const useMemberEventParser = (
         body:
           content.avatar_url && typeof content.avatar_url === 'string' ? (
             <>
-              <b>{userName}</b>
+              <UserLink userId={userId} onClick={handleMentionClick} />
               {' changed their avatar'}
             </>
           ) : (
             <>
-              <b>{userName}</b>
+              <UserLink userId={userId} onClick={handleMentionClick} />
               {' removed their avatar '}
             </>
           ),

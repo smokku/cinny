@@ -11,7 +11,7 @@ import { timeDayMonthYear, timeHourMinute } from '../../utils/time';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { RoomAvatar } from '../room-avatar';
 import { nameInitials } from '../../utils/common';
-import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
+import { useRoomAvatar, useRoomNickname, useRoomTopic } from '../../hooks/useRoomMeta';
 import { mDirectAtom } from '../../state/mDirectList';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useSetting } from '../../state/hooks/settings';
@@ -33,7 +33,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
   const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
-  const name = useRoomName(room);
+  const name = useRoomNickname(room, mDirects.has(room.roomId));
   const topic = useRoomTopic(room);
   const avatarHttpUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
 

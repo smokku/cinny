@@ -7,7 +7,7 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-import { useRoomAvatar, useRoomJoinRule, useRoomName } from '../../hooks/useRoomMeta';
+import { useRoomAvatar, useRoomJoinRule, useRoomNickname } from '../../hooks/useRoomMeta';
 import { mDirectAtom } from '../../state/mDirectList';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { General } from './general';
@@ -67,7 +67,7 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
   const mDirects = useAtomValue(mDirectAtom);
 
   const roomAvatar = useRoomAvatar(room, mDirects.has(room.roomId));
-  const roomName = useRoomName(room);
+  const roomName = useRoomNickname(room, mDirects.has(room.roomId));
   const joinRuleContent = useRoomJoinRule(room);
 
   const avatarUrl = roomAvatar
