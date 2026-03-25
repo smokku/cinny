@@ -209,8 +209,8 @@ export const isNotificationEvent = (mEvent: MatrixEvent) => {
 };
 
 export const roomHaveNotification = (room: Room): boolean => {
-  const total = room.getUnreadNotificationCount(NotificationCountType.Total);
-  const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
+  const total = room.getRoomUnreadNotificationCount(NotificationCountType.Total);
+  const highlight = room.getRoomUnreadNotificationCount(NotificationCountType.Highlight);
 
   return total > 0 || highlight > 0;
 };
@@ -235,8 +235,8 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
 };
 
 export const getUnreadInfo = (room: Room): UnreadInfo => {
-  const total = room.getUnreadNotificationCount(NotificationCountType.Total);
-  const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
+  const total = room.getRoomUnreadNotificationCount(NotificationCountType.Total);
+  const highlight = room.getRoomUnreadNotificationCount(NotificationCountType.Highlight);
   return {
     roomId: room.roomId,
     highlight,
@@ -477,10 +477,17 @@ export const getThreadReplies = (
   events: MatrixEvent[],
   rootId: string
 ): { allReplies: MatrixEvent[]; visibleReplies: MatrixEvent[]; redactedCount: number } => {
-  const allReplies = events.filter((ev) => ev.getId() !== rootId && !reactionOrEditEvent(ev));
-  const redactedCount = allReplies.filter((ev) => ev.isRedacted()).length;
-  const visibleReplies = allReplies.filter((ev) => !ev.isRedacted());
-  return { allReplies, visibleReplies, redactedCount };
+  const allReplies = events.filter(
+    (ev) => ev.getId() !== rootId && !reactionOrEditEvent(ev) && !ev.isState()
+  );
+  // Redacted reactions/edits lose their relation metadata but keep their type.
+  // Filter them out so they don't count as deleted replies.
+  const messageReplies = allReplies.filter(
+    (ev) => !ev.isRedacted() || ev.getType() === 'm.room.message' || ev.getType() === 'm.sticker'
+  );
+  const redactedCount = messageReplies.filter((ev) => ev.isRedacted()).length;
+  const visibleReplies = messageReplies.filter((ev) => !ev.isRedacted());
+  return { allReplies: messageReplies, visibleReplies, redactedCount };
 };
 
 export const formatThreadReplyCount = (displayCount: number, redactedCount: number): string => {

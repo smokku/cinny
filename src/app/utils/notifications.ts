@@ -1,6 +1,12 @@
 import { MatrixClient, ReceiptType, RelationType } from 'matrix-js-sdk';
 
-export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
+const sendLatestReadReceipt = async (
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  includeThreadEvents: boolean,
+  unthreaded: boolean
+) => {
   const room = mx.getRoom(roomId);
   if (!room) return;
 
@@ -28,6 +34,15 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
 
   await mx.sendReadReceipt(
     latestEvent,
-    privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
+    privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read,
+    unthreaded
   );
+};
+
+export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
+  await sendLatestReadReceipt(mx, roomId, privateReceipt, false, false);
+}
+
+export async function markAsReadScope(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
+  await sendLatestReadReceipt(mx, roomId, privateReceipt, true, true);
 }

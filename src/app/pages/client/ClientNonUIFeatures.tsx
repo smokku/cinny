@@ -2,7 +2,12 @@ import { useAtomValue } from 'jotai';
 import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
-import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
+import {
+  roomToThreadUnreadAtom,
+  roomToUnreadAtom,
+  unreadEqual,
+  unreadInfoToUnread,
+} from '../../state/room/roomToUnread';
 import LogoSVG from '../../../../public/res/svg/cinny.svg';
 import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
 import LogoHighlightSVG from '../../../../public/res/svg/cinny-highlight.svg';
@@ -54,12 +59,14 @@ function PageZoomFeature() {
 
 function FaviconUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
 
   useEffect(() => {
     let notification = false;
     let highlight = false;
+
     roomToUnread.forEach((unread) => {
-      if (unread.total > 0) {
+      if (unread.total > 0 || unread.highlight > 0) {
         notification = true;
       }
       if (unread.highlight > 0) {
@@ -67,12 +74,23 @@ function FaviconUpdater() {
       }
     });
 
+    roomToThreadUnread.forEach((threadToUnread) => {
+      threadToUnread.forEach((unread) => {
+        if (unread.total > 0 || unread.highlight > 0) {
+          notification = true;
+        }
+        if (unread.highlight > 0) {
+          highlight = true;
+        }
+      });
+    });
+
     if (notification) {
       setFavicon(highlight ? LogoHighlightSVG : LogoUnreadSVG);
     } else {
       setFavicon(LogoSVG);
     }
-  }, [roomToUnread]);
+  }, [roomToThreadUnread, roomToUnread]);
 
   return null;
 }

@@ -1,5 +1,5 @@
 import produce from 'immer';
-import { atom, useSetAtom } from 'jotai';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 import {
   IRoomTimelineData,
   MatrixClient,
@@ -10,15 +10,17 @@ import {
   RoomEvent,
   SyncState,
 } from 'matrix-js-sdk';
-import { ReceiptContent, ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
-import { useCallback, useEffect } from 'react';
+import { Thread, ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   Membership,
   NotificationType,
+  RoomToThreadUnread,
   RoomToUnread,
-  UnreadInfo,
-  Unread,
   StateEvent,
+  ThreadUnread,
+  Unread,
+  UnreadInfo,
 } from '../../../types/matrix/room';
 import {
   getAllParents,
@@ -28,10 +30,65 @@ import {
   isNotificationEvent,
   roomHaveUnread,
 } from '../../utils/room';
-import { roomToParentsAtom } from './roomToParents';
+import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
-import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
+import { roomToParentsAtom } from './roomToParents';
+
+const STABLE_UNREAD_THREAD_NOTIFICATIONS = 'unread_thread_notifications';
+const UNSTABLE_UNREAD_THREAD_NOTIFICATIONS = 'org.matrix.msc3773.unread_thread_notifications';
+const READ_RECEIPT = 'm.read';
+const PRIVATE_READ_RECEIPT = 'm.read.private';
+const MAIN_TIMELINE_THREAD_ID = 'main';
+
+type SavedUnreadNotification = {
+  notification_count?: number;
+  highlight_count?: number;
+};
+
+type SavedJoinedRoom = {
+  [STABLE_UNREAD_THREAD_NOTIFICATIONS]?: Record<string, SavedUnreadNotification>;
+  [UNSTABLE_UNREAD_THREAD_NOTIFICATIONS]?: Record<string, SavedUnreadNotification>;
+};
+
+type SavedSync = {
+  roomsData?: {
+    join?: Record<string, SavedJoinedRoom>;
+  };
+};
+
+type ReceiptLike = {
+  thread_id?: string;
+};
+
+type ReceiptContentLike = Record<
+  string,
+  Record<string, Record<string, ReceiptLike | undefined> | undefined> | undefined
+>;
+
+type ReceiptTargets = {
+  hasRoomReceipt: boolean;
+  hasUnthreadedReceipt: boolean;
+  threadIds: Set<string>;
+};
+
+type ThreadUnreadCounts = {
+  total: number;
+  highlight: number;
+};
+
+type ThreadUnreadLike = {
+  total: number;
+  highlight: number;
+  order: number;
+};
+
+type UnreadNotifications = Partial<Record<NotificationCountType, number>>;
+type HandleUnreadNotifications = (
+  unreadNotifications?: UnreadNotifications,
+  threadId?: string
+) => void;
+type HandleReceipt = (mEvent: MatrixEvent, room: Room) => void;
 
 export type RoomToUnreadAction =
   | {
@@ -44,6 +101,32 @@ export type RoomToUnreadAction =
     }
   | {
       type: 'DELETE';
+      roomId: string;
+    };
+
+export type RoomToThreadUnreadAction =
+  | {
+      type: 'RESET';
+      roomToThreadUnread: RoomToThreadUnread;
+    }
+  | {
+      type: 'SET_ROOM';
+      roomId: string;
+      threadToUnread: Map<string, ThreadUnread>;
+    }
+  | {
+      type: 'PUT';
+      roomId: string;
+      threadId: string;
+      unread: ThreadUnread;
+    }
+  | {
+      type: 'DELETE';
+      roomId: string;
+      threadId: string;
+    }
+  | {
+      type: 'DELETE_ROOM';
       roomId: string;
     };
 
@@ -109,13 +192,240 @@ export const unreadEqual = (u1: Unread, u2: Unread): boolean => {
   if (f1.size !== f2.size) return false;
 
   let fromEqual = true;
-  f1?.forEach((item) => {
-    if (!f2?.has(item)) {
+  f1.forEach((item) => {
+    if (!f2.has(item)) {
       fromEqual = false;
     }
   });
 
   return fromEqual;
+};
+
+export const threadUnreadEqual = (t1: ThreadUnread, t2: ThreadUnread): boolean =>
+  t1.highlight === t2.highlight && t1.total === t2.total && t1.order === t2.order;
+
+export const roomThreadUnreadEqual = (
+  t1?: Map<string, ThreadUnread>,
+  t2?: Map<string, ThreadUnread>
+): boolean => {
+  if (!t1 && !t2) return true;
+  if (!t1 || !t2) return false;
+  if (t1.size !== t2.size) return false;
+
+  return Array.from(t1.entries()).every(([threadId, unread]) => {
+    const other = t2.get(threadId);
+    return !!other && threadUnreadEqual(unread, other);
+  });
+};
+
+const putThreadUnread = (
+  roomToThreadUnread: RoomToThreadUnread,
+  roomId: string,
+  threadId: string,
+  unread: ThreadUnread
+) => {
+  const roomThreads = roomToThreadUnread.get(roomId) ?? new Map<string, ThreadUnread>();
+  roomThreads.set(threadId, unread);
+  roomToThreadUnread.set(roomId, roomThreads);
+};
+
+const setRoomThreadUnread = (
+  roomToThreadUnread: RoomToThreadUnread,
+  roomId: string,
+  threadToUnread: Map<string, ThreadUnread>
+) => {
+  if (threadToUnread.size === 0) {
+    roomToThreadUnread.delete(roomId);
+    return;
+  }
+
+  roomToThreadUnread.set(roomId, new Map(threadToUnread));
+};
+
+const deleteThreadUnread = (
+  roomToThreadUnread: RoomToThreadUnread,
+  roomId: string,
+  threadId: string
+) => {
+  const roomThreads = roomToThreadUnread.get(roomId);
+  if (!roomThreads) return;
+
+  roomThreads.delete(threadId);
+  if (roomThreads.size === 0) {
+    roomToThreadUnread.delete(roomId);
+    return;
+  }
+
+  roomToThreadUnread.set(roomId, roomThreads);
+};
+
+const deleteRoomThreadUnread = (roomToThreadUnread: RoomToThreadUnread, roomId: string) => {
+  roomToThreadUnread.delete(roomId);
+};
+
+const shouldKeepThreadUnread = (
+  notificationType: NotificationType,
+  total: number,
+  highlight: number
+): boolean => {
+  if (notificationType === NotificationType.Mute) return false;
+  if (notificationType === NotificationType.MentionsAndKeywords) return highlight > 0;
+  return total > 0;
+};
+
+const getReceiptTargets = (content: ReceiptContentLike, myUserId: string): ReceiptTargets => {
+  let hasRoomReceipt = false;
+  let hasUnthreadedReceipt = false;
+  const threadIds = new Set<string>();
+
+  Object.values(content).forEach((receiptGroup) => {
+    if (!receiptGroup) return;
+
+    Object.entries(receiptGroup).forEach(([receiptType, userReceipts]) => {
+      if (receiptType !== READ_RECEIPT && receiptType !== PRIVATE_READ_RECEIPT) return;
+      const receipt = userReceipts?.[myUserId];
+      if (!receipt) return;
+
+      const threadId = receipt.thread_id;
+      if (!threadId) {
+        hasUnthreadedReceipt = true;
+        hasRoomReceipt = true;
+        return;
+      }
+
+      if (threadId === MAIN_TIMELINE_THREAD_ID) {
+        hasRoomReceipt = true;
+        return;
+      }
+
+      threadIds.add(threadId);
+    });
+  });
+
+  return { hasRoomReceipt, hasUnthreadedReceipt, threadIds };
+};
+
+const rebuildThreadUnreadMap = <T extends ThreadUnreadLike>(
+  threadIds: Iterable<string>,
+  getThreadCounts: (threadId: string) => ThreadUnreadCounts,
+  notificationType: NotificationType,
+  previousRoomThreads: Map<string, T> | undefined,
+  getNextOrder: () => number
+): Map<string, T> => {
+  const nextRoomThreads = new Map<string, T>();
+
+  Array.from(new Set(threadIds)).forEach((threadId) => {
+    const { total, highlight } = getThreadCounts(threadId);
+    if (!shouldKeepThreadUnread(notificationType, total, highlight)) return;
+
+    nextRoomThreads.set(threadId, {
+      total,
+      highlight,
+      order: previousRoomThreads?.get(threadId)?.order ?? getNextOrder(),
+    } as T);
+  });
+
+  return nextRoomThreads;
+};
+
+const getSavedRoomThreadNotifications = (
+  joinRoom: SavedJoinedRoom
+): Record<string, SavedUnreadNotification> | undefined =>
+  joinRoom[STABLE_UNREAD_THREAD_NOTIFICATIONS] ?? joinRoom[UNSTABLE_UNREAD_THREAD_NOTIFICATIONS];
+
+const createThreadUnread = (
+  total: number,
+  highlight: number,
+  notificationType: NotificationType,
+  getNextOrder: () => number
+): ThreadUnread | undefined => {
+  if (!shouldKeepThreadUnread(notificationType, total, highlight)) {
+    return undefined;
+  }
+
+  return {
+    total,
+    highlight,
+    order: getNextOrder(),
+  };
+};
+
+const createRoomThreadUnread = (
+  room: Room,
+  threadId: string,
+  previousRoomThreads: Map<string, ThreadUnread> | undefined,
+  getNextOrder: () => number
+): ThreadUnread | undefined =>
+  rebuildThreadUnreadMap(
+    [threadId],
+    (targetThreadId) => ({
+      total: room.getThreadUnreadNotificationCount(targetThreadId, NotificationCountType.Total),
+      highlight: room.getThreadUnreadNotificationCount(
+        targetThreadId,
+        NotificationCountType.Highlight
+      ),
+    }),
+    getNotificationType(room.client, room.roomId),
+    previousRoomThreads,
+    getNextOrder
+  ).get(threadId);
+
+const rebuildRoomThreadUnread = (
+  room: Room,
+  threadIds: Iterable<string>,
+  previousRoomThreads: Map<string, ThreadUnread> | undefined,
+  getNextOrder: () => number
+): Map<string, ThreadUnread> =>
+  rebuildThreadUnreadMap(
+    threadIds,
+    (threadId) => ({
+      total: room.getThreadUnreadNotificationCount(threadId, NotificationCountType.Total),
+      highlight: room.getThreadUnreadNotificationCount(threadId, NotificationCountType.Highlight),
+    }),
+    getNotificationType(room.client, room.roomId),
+    previousRoomThreads,
+    getNextOrder
+  );
+
+const getSavedThreadUnread = async (
+  mx: MatrixClient,
+  getNextOrder: () => number
+): Promise<RoomToThreadUnread> => {
+  const savedSync = (await mx.store.getSavedSync()) as SavedSync | null;
+  const joinRooms = savedSync?.roomsData?.join ?? {};
+  const roomToThreadUnread: RoomToThreadUnread = new Map();
+
+  Object.entries(joinRooms).forEach(([roomId, joinRoom]) => {
+    const room = mx.getRoom(roomId);
+    if (!room || room.isSpaceRoom() || room.getMyMembership() !== Membership.Join) {
+      return;
+    }
+
+    const unreadThreadNotifications = getSavedRoomThreadNotifications(joinRoom);
+    if (!unreadThreadNotifications) return;
+
+    const notificationType = getNotificationType(mx, roomId);
+    if (notificationType === NotificationType.Mute) return;
+
+    const roomThreads = new Map<string, ThreadUnread>();
+    Object.entries(unreadThreadNotifications).forEach(([threadId, notification]) => {
+      const threadUnread = createThreadUnread(
+        notification.notification_count ?? 0,
+        notification.highlight_count ?? 0,
+        notificationType,
+        getNextOrder
+      );
+      if (threadUnread) {
+        roomThreads.set(threadId, threadUnread);
+      }
+    });
+
+    if (roomThreads.size > 0) {
+      roomToThreadUnread.set(roomId, roomThreads);
+    }
+  });
+
+  return roomToThreadUnread;
 };
 
 const baseRoomToUnread = atom<RoomToUnread>(new Map());
@@ -138,8 +448,6 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
       const { unreadInfo } = action;
       const currentUnread = get(baseRoomToUnread).get(unreadInfo.roomId);
       if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
-        // Do not update if unread data has not changes
-        // like total & highlight
         return;
       }
       set(
@@ -169,32 +477,151 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
   }
 );
 
+const baseRoomToThreadUnread = atom<RoomToThreadUnread>(new Map());
+export const roomToThreadUnreadAtom = atom<
+  RoomToThreadUnread,
+  [RoomToThreadUnreadAction],
+  undefined
+>(
+  (get) => get(baseRoomToThreadUnread),
+  (get, set, action) => {
+    if (action.type === 'RESET') {
+      set(baseRoomToThreadUnread, action.roomToThreadUnread);
+      return;
+    }
+
+    if (action.type === 'SET_ROOM') {
+      const currentThreads = get(baseRoomToThreadUnread).get(action.roomId);
+      if (roomThreadUnreadEqual(currentThreads, action.threadToUnread)) return;
+
+      set(
+        baseRoomToThreadUnread,
+        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
+          setRoomThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadToUnread)
+        )
+      );
+      return;
+    }
+
+    if (action.type === 'PUT') {
+      const currentThread = get(baseRoomToThreadUnread).get(action.roomId)?.get(action.threadId);
+      if (currentThread && threadUnreadEqual(currentThread, action.unread)) return;
+
+      set(
+        baseRoomToThreadUnread,
+        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
+          putThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadId, action.unread)
+        )
+      );
+      return;
+    }
+
+    if (action.type === 'DELETE') {
+      if (!get(baseRoomToThreadUnread).get(action.roomId)?.has(action.threadId)) return;
+
+      set(
+        baseRoomToThreadUnread,
+        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
+          deleteThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadId)
+        )
+      );
+      return;
+    }
+
+    if (action.type === 'DELETE_ROOM') {
+      if (!get(baseRoomToThreadUnread).has(action.roomId)) return;
+
+      set(
+        baseRoomToThreadUnread,
+        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
+          deleteRoomThreadUnread(draftRoomToThreadUnread, action.roomId)
+        )
+      );
+    }
+  }
+);
+
 export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roomToUnreadAtom) => {
   const setUnreadAtom = useSetAtom(unreadAtom);
+  const setThreadUnreadAtom = useSetAtom(roomToThreadUnreadAtom);
+  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
+  const nextThreadOrderRef = useRef(1);
+  const roomToThreadUnreadRef = useRef(roomToThreadUnread);
+  const pendingThreadResetRef = useRef<Map<string, Set<string>>>(new Map());
+  const previousRoomsNotificationPreferencesRef = useRef(roomsNotificationPreferences);
+
+  const getNextThreadOrder = useCallback((): number => {
+    const nextOrder = nextThreadOrderRef.current;
+    nextThreadOrderRef.current += 1;
+    return nextOrder;
+  }, []);
 
   useEffect(() => {
+    roomToThreadUnreadRef.current = roomToThreadUnread;
+  }, [roomToThreadUnread]);
+
+  const resetRoomUnread = useCallback(() => {
     setUnreadAtom({
       type: 'RESET',
       unreadInfos: getUnreadInfos(mx),
     });
   }, [mx, setUnreadAtom]);
 
+  const seedThreadUnread = useCallback(async (): Promise<void> => {
+    setThreadUnreadAtom({
+      type: 'RESET',
+      roomToThreadUnread: await getSavedThreadUnread(mx, getNextThreadOrder),
+    });
+  }, [getNextThreadOrder, mx, setThreadUnreadAtom]);
+
+  const rebuildTrackedThreadUnread = useCallback(() => {
+    const currentRoomToThreadUnread = roomToThreadUnreadRef.current;
+    const nextRoomToThreadUnread: RoomToThreadUnread = new Map();
+
+    currentRoomToThreadUnread.forEach((roomThreads, roomId) => {
+      const room = mx.getRoom(roomId);
+      if (!room || room.isSpaceRoom() || room.getMyMembership() !== Membership.Join) {
+        return;
+      }
+
+      const nextRoomThreads = rebuildRoomThreadUnread(
+        room,
+        roomThreads.keys(),
+        roomThreads,
+        getNextThreadOrder
+      );
+      if (nextRoomThreads.size > 0) {
+        nextRoomToThreadUnread.set(roomId, nextRoomThreads);
+      }
+    });
+
+    setThreadUnreadAtom({
+      type: 'RESET',
+      roomToThreadUnread: nextRoomToThreadUnread,
+    });
+  }, [getNextThreadOrder, mx, setThreadUnreadAtom]);
+
+  useEffect(() => {
+    resetRoomUnread();
+    seedThreadUnread().catch(() => undefined);
+  }, [resetRoomUnread, seedThreadUnread]);
+
   useSyncState(
     mx,
     useCallback(
-      (state, prevState) => {
-        if (
-          (state === SyncState.Prepared && prevState === null) ||
-          (state === SyncState.Syncing && prevState !== SyncState.Syncing)
-        ) {
-          setUnreadAtom({
-            type: 'RESET',
-            unreadInfos: getUnreadInfos(mx),
-          });
+      (state: SyncState, prevState: SyncState | null) => {
+        if (state === SyncState.Prepared && prevState === null) {
+          resetRoomUnread();
+          return;
+        }
+
+        if (state === SyncState.Syncing && prevState !== SyncState.Syncing) {
+          resetRoomUnread();
+          rebuildTrackedThreadUnread();
         }
       },
-      [mx, setUnreadAtom]
+      [rebuildTrackedThreadUnread, resetRoomUnread]
     )
   );
 
@@ -334,47 +761,152 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         });
         return;
       }
-    };
-    mx.on(RoomEvent.Receipt, handleReceipt);
-    return () => {
-      mx.removeListener(RoomEvent.Receipt, handleReceipt);
-    };
-  }, [mx, setUnreadAtom]);
 
-  useEffect(() => {
-    setUnreadAtom({
-      type: 'RESET',
-      unreadInfos: getUnreadInfos(mx),
-    });
-  }, [mx, setUnreadAtom, roomsNotificationPreferences]);
+      setThreadUnreadAtom({
+        type: 'DELETE',
+        roomId: room.roomId,
+        threadId,
+      });
+    };
 
-  useEffect(() => {
-    const handleMembershipChange = (room: Room, membership: string) => {
-      if (membership !== Membership.Join) {
-        setUnreadAtom({
-          type: 'DELETE',
-          roomId: room.roomId,
+    const bindRoom = (room: Room) => {
+      if (roomHandlers.has(room.roomId)) return;
+      if (room.isSpaceRoom() || room.getMyMembership() !== Membership.Join) return;
+
+      const handleUnreadNotifications: HandleUnreadNotifications = (
+        unreadNotifications,
+        threadId
+      ) => {
+        if (threadId) {
+          handleThreadUnreadUpdate(room, threadId);
+          return;
+        }
+
+        if (!unreadNotifications) {
+          startPendingThreadReset(room);
+        }
+      };
+
+      const handleReceipt: HandleReceipt = (mEvent, receiptRoom) => {
+        if (receiptRoom.roomId !== room.roomId) return;
+
+        const myUserId = mx.getUserId();
+        if (!myUserId) return;
+
+        const { hasRoomReceipt, hasUnthreadedReceipt, threadIds } = getReceiptTargets(
+          mEvent.getContent<ReceiptContentLike>(),
+          myUserId
+        );
+
+        if (hasRoomReceipt) {
+          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+        }
+
+        if (hasUnthreadedReceipt) {
+          setThreadUnreadAtom({
+            type: 'DELETE_ROOM',
+            roomId: room.roomId,
+          });
+          return;
+        }
+
+        threadIds.forEach((threadId) => {
+          setThreadUnreadAtom({
+            type: 'DELETE',
+            roomId: room.roomId,
+            threadId,
+          });
         });
-      }
+      };
+
+      const handleNewReply: HandleNewReply = (thread) => {
+        const lastEvent = thread.lastReply();
+        if (!lastEvent) return;
+        if (lastEvent.getSender() === mx.getUserId()) return;
+
+        const notificationType = getNotificationType(mx, room.roomId);
+        if (notificationType === NotificationType.Mute) return;
+
+        const eventId = lastEvent.getId();
+        const userId = mx.getUserId();
+        if (!eventId || !userId) return;
+        if (room.hasUserReadEvent(userId, eventId)) return;
+
+        handleThreadUnreadUpdate(room, thread.id);
+      };
+
+      room.on(RoomEvent.UnreadNotifications, handleUnreadNotifications);
+      room.on(RoomEvent.Receipt, handleReceipt);
+      room.on(ThreadEvent.NewReply, handleNewReply);
+      roomHandlers.set(room.roomId, {
+        room,
+        handleUnreadNotifications,
+        handleReceipt,
+        handleNewReply,
+      });
     };
+
+    const unbindRoom = (roomId: string) => {
+      const handlers = roomHandlers.get(roomId);
+      if (!handlers) return;
+
+      handlers.room.off(RoomEvent.UnreadNotifications, handlers.handleUnreadNotifications);
+      handlers.room.off(RoomEvent.Receipt, handlers.handleReceipt);
+      handlers.room.off(ThreadEvent.NewReply, handlers.handleNewReply);
+      roomHandlers.delete(roomId);
+      pendingThreadResets.delete(roomId);
+    };
+
+    mx.getRooms().forEach(bindRoom);
+
+    const handleMembershipChange = (room: Room, membership: string) => {
+      if (membership === Membership.Join) {
+        bindRoom(room);
+        return;
+      }
+
+      unbindRoom(room.roomId);
+      setUnreadAtom({
+        type: 'DELETE',
+        roomId: room.roomId,
+      });
+      setThreadUnreadAtom({
+        type: 'DELETE_ROOM',
+        roomId: room.roomId,
+      });
+    };
+
     mx.on(RoomEvent.MyMembership, handleMembershipChange);
+
     return () => {
       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
+      roomHandlers.forEach((handlers) => {
+        handlers.room.off(RoomEvent.UnreadNotifications, handlers.handleUnreadNotifications);
+        handlers.room.off(RoomEvent.Receipt, handlers.handleReceipt);
+        handlers.room.off(ThreadEvent.NewReply, handlers.handleNewReply);
+      });
+      roomHandlers.clear();
+      pendingThreadResets.clear();
     };
-  }, [mx, setUnreadAtom]);
+  }, [getNextThreadOrder, mx, setThreadUnreadAtom, setUnreadAtom]);
+
+  useEffect(() => {
+    if (previousRoomsNotificationPreferencesRef.current === roomsNotificationPreferences) return;
+
+    previousRoomsNotificationPreferencesRef.current = roomsNotificationPreferences;
+    resetRoomUnread();
+    rebuildTrackedThreadUnread();
+  }, [rebuildTrackedThreadUnread, resetRoomUnread, roomsNotificationPreferences]);
 
   useStateEventCallback(
     mx,
     useCallback(
       (mEvent) => {
         if (mEvent.getType() === StateEvent.SpaceChild) {
-          setUnreadAtom({
-            type: 'RESET',
-            unreadInfos: getUnreadInfos(mx),
-          });
+          resetRoomUnread();
         }
       },
-      [mx, setUnreadAtom]
+      [resetRoomUnread]
     )
   );
 };

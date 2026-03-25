@@ -48,14 +48,13 @@ import {
 import { useHomeRooms } from './useHomeRooms';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomNavCategoryButton, RoomWithThreads } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavHeader, PageNavContent } from '../../../components/page';
-import { useRoomsUnread } from '../../../state/hooks/unread';
-import { markAsRead } from '../../../utils/notifications';
+import { useRoomsCombinedUnread } from '../../../state/hooks/unread';
+import { markAsReadScope } from '../../../utils/notifications';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
@@ -67,6 +66,7 @@ import {
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
+import { roomToThreadUnreadAtom, roomToUnreadAtom } from '../../../state/room/roomToUnread';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -74,12 +74,12 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useHomeRooms();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const unread = useRoomsCombinedUnread(orphanRooms);
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsRead(mx, rId, hideActivity));
+    orphanRooms.forEach((rId) => markAsReadScope(mx, rId, hideActivity));
     requestClose();
   };
 
@@ -203,6 +203,7 @@ export function Home() {
   const rooms = useHomeRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
   const navigate = useNavigate();
 
   const selectedRoomId = useSelectedRoom();
@@ -219,10 +220,12 @@ export function Home() {
         : factoryRoomIdByAtoZ(mx)
     );
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
-      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+      return items.filter(
+        (rId) => roomToUnread.has(rId) || roomToThreadUnread.has(rId) || rId === selectedRoomId
+      );
     }
     return items;
-  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, rooms, closedCategories, roomToUnread, roomToThreadUnread, selectedRoomId]);
 
   const virtualizer = useVirtualizer({
     count: sortedRooms.length,
@@ -359,7 +362,7 @@ export function Home() {
                       key={vItem.index}
                       ref={virtualizer.measureElement}
                     >
-                      <RoomNavItem
+                      <RoomWithThreads
                         room={room}
                         selected={selected}
                         linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}

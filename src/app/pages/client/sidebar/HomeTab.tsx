@@ -8,9 +8,8 @@ import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { mDirectAtom } from '../../../state/mDirectList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { getHomePath, joinPathComponent } from '../../pathUtils';
-import { useRoomsUnread } from '../../../state/hooks/unread';
+import { useRoomsCombinedUnread } from '../../../state/hooks/unread';
 import {
   SidebarAvatar,
   SidebarItem,
@@ -22,7 +21,7 @@ import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useHomeRooms } from '../home/useHomeRooms';
-import { markAsRead } from '../../../utils/notifications';
+import { markAsReadScope } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -33,12 +32,12 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useHomeRooms();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const unread = useRoomsCombinedUnread(orphanRooms);
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsRead(mx, rId, hideActivity));
+    orphanRooms.forEach((rId) => markAsReadScope(mx, rId, hideActivity));
     requestClose();
   };
 
@@ -70,7 +69,7 @@ export function HomeTab() {
   const mDirects = useAtomValue(mDirectAtom);
   const roomToParents = useAtomValue(roomToParentsAtom);
   const orphanRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
-  const homeUnread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const homeUnread = useRoomsCombinedUnread(orphanRooms);
   const homeSelected = useHomeSelected();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
