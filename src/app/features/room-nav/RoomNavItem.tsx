@@ -52,7 +52,7 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
-import { useRoomName } from '../../hooks/useRoomMeta';
+import { useRoomNickname } from '../../hooks/useRoomMeta';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { callChatAtom } from '../../state/callEmbed';
@@ -262,7 +262,7 @@ export function RoomNavItem({
     (receipt) => receipt.userId !== mx.getUserId()
   );
 
-  const roomName = useRoomName(room);
+  const roomName = useRoomNickname(room, direct);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();

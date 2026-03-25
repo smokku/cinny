@@ -96,6 +96,7 @@ import { Reactions, Message, Event, EncryptedContent } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { RoomIntro } from '../../components/room-intro';
+import { UserLink } from '../../components/user-link';
 import {
   getIntersectionObserverEntry,
   useIntersectionObserver,
@@ -1653,8 +1654,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomName]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName =
-          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1685,7 +1684,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               content={
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
-                    <b>{senderName}</b>
+                    <UserLink userId={senderId} onClick={mentionClickHandler} />
                     {t('Organisms.RoomCommon.changed_room_name')}
                   </Text>
                 </Box>
@@ -1697,8 +1696,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomTopic]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName =
-          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1729,7 +1726,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               content={
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
-                    <b>{senderName}</b>
+                    <UserLink userId={senderId} onClick={mentionClickHandler} />
                     {' changed room topic'}
                   </Text>
                 </Box>
@@ -1741,8 +1738,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.RoomAvatar]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName =
-          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const timeJSX = (
           <Time
@@ -1773,7 +1768,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               content={
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
-                    <b>{senderName}</b>
+                    <UserLink userId={senderId} onClick={mentionClickHandler} />
                     {' changed room avatar'}
                   </Text>
                 </Box>
@@ -1827,8 +1822,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [StateEvent.GroupCallMemberPrefix]: (mEventId, mEvent, item) => {
         const highlighted = focusItem?.index === item && focusItem.highlight;
         const senderId = mEvent.getSender() ?? '';
-        const senderName =
-          getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
         const content = mEvent.getContent<SessionMembershipData>();
         const prevContent = mEvent.getPrevContent();
@@ -1867,7 +1860,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               content={
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
-                    <b>{senderName}</b>
+                    <UserLink userId={senderId} onClick={mentionClickHandler} />
                     {callJoined ? ' joined the call' : ' ended the call'}
                   </Text>
                 </Box>
@@ -1881,8 +1874,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (!showHiddenEvents) return null;
       const highlighted = focusItem?.index === item && focusItem.highlight;
       const senderId = mEvent.getSender() ?? '';
-      const senderName =
-        getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
       const timeJSX = (
         <Time
@@ -1913,7 +1904,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             content={
               <Box grow="Yes" direction="Column">
                 <Text size="T300" priority="300">
-                  <b>{senderName}</b>
+                  <UserLink userId={senderId} onClick={mentionClickHandler} />
                   {' sent '}
                   <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
                   {' state event'}
@@ -1932,8 +1923,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
       const highlighted = focusItem?.index === item && focusItem.highlight;
       const senderId = mEvent.getSender() ?? '';
-      const senderName =
-        getMemberDisplayName(room, senderId, nicknames) || getMxIdLocalPart(senderId);
 
       const timeJSX = (
         <Time
@@ -1964,7 +1953,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             content={
               <Box grow="Yes" direction="Column">
                 <Text size="T300" priority="300">
-                  <b>{senderName}</b>
+                  <UserLink userId={senderId} onClick={mentionClickHandler} />
                   {' sent '}
                   <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
                   {' event'}

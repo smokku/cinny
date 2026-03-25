@@ -2,7 +2,7 @@ import React from 'react';
 import { Room } from 'matrix-js-sdk';
 import { Chip, Text } from 'folds';
 import { useAtomValue } from 'jotai';
-import { useRoomName } from '../../hooks/useRoomMeta';
+import { useRoomNickname } from '../../hooks/useRoomMeta';
 import { RoomIcon } from '../../components/room-avatar';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { getAllParents, guessPerfectParent } from '../../utils/room';
@@ -18,11 +18,11 @@ type CallRoomNameProps = {
 };
 export function CallRoomName({ room }: CallRoomNameProps) {
   const mx = useMatrixClient();
-  const name = useRoomName(room);
   const roomToParents = useAtomValue(roomToParentsAtom);
   const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
   const mDirects = useAtomValue(mDirectAtom);
   const dm = mDirects.has(room.roomId);
+  const name = useRoomNickname(room, dm);
 
   const allRoomsSet = useAllJoinedRoomsSet();
   const getRoom = useGetRoom(allRoomsSet);

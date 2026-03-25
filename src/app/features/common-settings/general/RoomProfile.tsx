@@ -24,7 +24,7 @@ import {
   useRoomAvatar,
   useRoomBanner,
   useRoomJoinRule,
-  useRoomName,
+  useRoomNickname,
   useRoomTopic,
 } from '../../../hooks/useRoomMeta';
 import { mDirectAtom } from '../../../state/mDirectList';
@@ -394,7 +394,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
 
   const avatar = useRoomAvatar(room, directs.has(room.roomId));
   const banner = useRoomBanner(room);
-  const name = useRoomName(room);
+  const name = useRoomNickname(room, directs.has(room.roomId));
   const topic = useRoomTopic(room);
   const joinRule = useRoomJoinRule(room);
 
