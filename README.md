@@ -12,30 +12,28 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 
 ## Added
 
-- Branding support via config.json.
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
-- Dedicated threads sidebar user interface.
 - Unread threads on the room list sidebar.
+- Dedicated threads sidebar user interface.
 - Inline media galleries.
 - Extended user profiles, banners, nicknames, and extended presence handling.
-- Set user presence using User Menu.
-- Show user presence on sidebar avatar.
+- Set & show user presence using User Menu on sidebar avatar.
 - Presence display in the members drawer.
 - Room banners in the Lobby.
-- User Profile access on join and part messages.
-- Autoplay Avatars setting.
+- User Profile access on join, part and other system messages.
 - Large URL previews.
 - Discord-like Dark Sidebar appearance toggle.
 - Change password section in settings.
 - Show active bridges in members drawer.
+- Branding support via config.json.
 
 ## Changed
 
 - Replaced the sidebar Settings button with a user menu.
 - Discord-like message-reply layout and hover behavior.
   - Move the message context outside of message content.
-- Join rooms in Lobby by clicking the row
+- Join rooms in Lobby by clicking the row.
 
 ## Fixed
 
