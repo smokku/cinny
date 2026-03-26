@@ -38,6 +38,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
   await mx.initRustCrypto();
 
   mx.setMaxListeners(50);
+  mx.matrixRTC.setMaxListeners(50);
 
   return mx;
 };
