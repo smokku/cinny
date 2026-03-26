@@ -8,13 +8,61 @@ type SessionInfo = {
   baseUrl: string;
 };
 
+const SW_SESSION_CACHE = 'cinny-sw-session-v1';
+const SW_SESSION_URL = '/sw-session-meta';
+
 /**
  * Store session per client (tab)
  */
 const sessions = new Map<string, SessionInfo>();
 
+let persistedSession: SessionInfo | undefined;
+
 const clientToResolve = new Map<string, (value: SessionInfo | undefined) => void>();
 const clientToSessionPromise = new Map<string, Promise<SessionInfo | undefined>>();
+
+async function persistSession(session: SessionInfo): Promise<void> {
+  try {
+    const cache = await self.caches.open(SW_SESSION_CACHE);
+    await cache.put(
+      SW_SESSION_URL,
+      new Response(JSON.stringify(session), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  } catch {
+    // Ignore cache persistence failures. Media requests can still use in-memory session state.
+  }
+}
+
+async function clearPersistedSession(): Promise<void> {
+  try {
+    const cache = await self.caches.open(SW_SESSION_CACHE);
+    await cache.delete(SW_SESSION_URL);
+  } catch {
+    // Ignore cache persistence failures.
+  }
+}
+
+async function loadPersistedSession(): Promise<SessionInfo | undefined> {
+  try {
+    const cache = await self.caches.open(SW_SESSION_CACHE);
+    const response = await cache.match(SW_SESSION_URL);
+    if (!response) return undefined;
+
+    const session = await response.json();
+    if (typeof session.accessToken === 'string' && typeof session.baseUrl === 'string') {
+      return {
+        accessToken: session.accessToken,
+        baseUrl: session.baseUrl,
+      };
+    }
+  } catch {
+    // Ignore invalid cache entries and fall through.
+  }
+
+  return undefined;
+}
 
 async function cleanupDeadClients() {
   const activeClients = await self.clients.matchAll();
@@ -29,12 +77,17 @@ async function cleanupDeadClients() {
   });
 }
 
-function setSession(clientId: string, accessToken: any, baseUrl: any) {
+function setSession(clientId: string, accessToken: unknown, baseUrl: unknown) {
   if (typeof accessToken === 'string' && typeof baseUrl === 'string') {
-    sessions.set(clientId, { accessToken, baseUrl });
+    const session = { accessToken, baseUrl };
+    sessions.set(clientId, session);
+    persistedSession = session;
+    persistSession(session).catch(() => undefined);
   } else {
     // Logout or invalid session
     sessions.delete(clientId);
+    persistedSession = undefined;
+    clearPersistedSession().catch(() => undefined);
   }
 
   const resolveSession = clientToResolve.get(clientId);
@@ -85,6 +138,10 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
     (async () => {
       await self.clients.claim();
       await cleanupDeadClients();
+      persistedSession = await loadPersistedSession();
+
+      const windowClients = await self.clients.matchAll({ type: 'window' });
+      windowClients.forEach((client) => client.postMessage({ type: 'requestSession' }));
     })()
   );
 });
@@ -100,11 +157,18 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
 
   if (type === 'setSession') {
     setSession(client.id, accessToken, baseUrl);
-    cleanupDeadClients();
+    event.waitUntil(cleanupDeadClients());
   }
 });
 
-const MEDIA_PATHS = ['/_matrix/client/v1/media/download', '/_matrix/client/v1/media/thumbnail'];
+const MEDIA_PATHS = [
+  '/_matrix/client/v1/media/download',
+  '/_matrix/client/v1/media/thumbnail',
+  '/_matrix/media/v3/download',
+  '/_matrix/media/v3/thumbnail',
+  '/_matrix/media/r0/download',
+  '/_matrix/media/r0/thumbnail',
+];
 
 function mediaPath(url: string): boolean {
   try {
@@ -131,28 +195,52 @@ function fetchConfig(token: string): RequestInit {
   };
 }
 
+async function getPersistedSession(): Promise<SessionInfo | undefined> {
+  if (persistedSession) return persistedSession;
+
+  const session = await loadPersistedSession();
+  if (session) {
+    persistedSession = session;
+  }
+
+  return session;
+}
+
 self.addEventListener('fetch', (event: FetchEvent) => {
   const { url, method } = event.request;
 
   if (method !== 'GET' || !mediaPath(url)) return;
 
   const { clientId } = event;
-  if (!clientId) return;
 
-  const session = sessions.get(clientId);
-  if (session) {
-    if (validMediaRequest(url, session.baseUrl)) {
-      event.respondWith(fetch(url, fetchConfig(session.accessToken)));
-    }
+  const session = clientId ? sessions.get(clientId) : undefined;
+  if (session && validMediaRequest(url, session.baseUrl)) {
+    event.respondWith(fetch(url, fetchConfig(session.accessToken)));
     return;
   }
 
   event.respondWith(
-    requestSessionWithTimeout(clientId).then((s) => {
-      if (s && validMediaRequest(url, s.baseUrl)) {
-        return fetch(url, fetchConfig(s.accessToken));
+    (async () => {
+      const cachedSession = await getPersistedSession();
+      if (cachedSession && validMediaRequest(url, cachedSession.baseUrl)) {
+        return fetch(url, fetchConfig(cachedSession.accessToken));
       }
+
+      if (!clientId) {
+        return fetch(event.request);
+      }
+
+      const requestedSession = await requestSessionWithTimeout(clientId);
+      if (requestedSession && validMediaRequest(url, requestedSession.baseUrl)) {
+        return fetch(url, fetchConfig(requestedSession.accessToken));
+      }
+
+      const fallbackSession = await getPersistedSession();
+      if (fallbackSession && validMediaRequest(url, fallbackSession.baseUrl)) {
+        return fetch(url, fetchConfig(fallbackSession.accessToken));
+      }
+
       return fetch(event.request);
-    })
+    })()
   );
 });
