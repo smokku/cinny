@@ -35,6 +35,14 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
   navigator.serviceWorker.ready.then(sendSessionToSW);
 
+  window.addEventListener('pageshow', sendSessionToSW);
+  window.addEventListener('focus', sendSessionToSW);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      sendSessionToSW();
+    }
+  });
+
   navigator.serviceWorker.addEventListener('message', (ev) => {
     const { type } = ev.data ?? {};
 
