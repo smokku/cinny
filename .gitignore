@@ -5,3 +5,7 @@ devAssets
 
 .DS_Store
 .idea
+.claude
+.codex
+CLAUDE.md
+AGENTS.md
