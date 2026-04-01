@@ -782,6 +782,24 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
           return;
         }
 
+        // Room-level counters changed (read receipt landed, counts dropped,
+        // or the SDK signalled a reset with `unreadNotifications=undefined`).
+        // Refresh `roomToUnreadAtom` immediately so downstream consumers
+        // (e.g. the Inbox avatar badge) recompute against the fresh SDK
+        // counts instead of waiting for a later timeline event or a
+        // room-level receipt that some servers never emit.
+        const notificationType = getNotificationType(mx, room.roomId);
+        if (notificationType === NotificationType.Mute) {
+          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+        } else {
+          const unreadInfo = getUnreadInfo(room);
+          if (unreadInfo.total === 0 && unreadInfo.highlight === 0) {
+            setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+          } else {
+            setUnreadAtom({ type: 'PUT', unreadInfo });
+          }
+        }
+
         if (!unreadNotifications) {
           startPendingThreadReset(room);
         }
