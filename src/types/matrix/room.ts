@@ -55,6 +55,7 @@ export enum MessageEvent {
 export enum RoomType {
   Space = 'm.space',
   Call = 'org.matrix.msc3417.call',
+  Forum = 'm.forum',
 }
 
 export type MSpaceChildContent = {

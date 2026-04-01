@@ -465,9 +465,9 @@ function ThreadReplyChip({
   const { allReplies, visibleReplies, redactedCount } = getThreadReplies(threadEvents, mEventId);
 
   const replyCount = thread ? thread.length : allReplies.length;
-  if (replyCount === 0) return null;
+  if (replyCount === 0 && allReplies.length === 0) return null;
 
-  const displayCount = replyCount - redactedCount;
+  const displayCount = visibleReplies.length;
 
   const uniqueSenders = [
     ...new Set(visibleReplies.map((ev) => ev.getSender()).filter((id): id is string => !!id)),

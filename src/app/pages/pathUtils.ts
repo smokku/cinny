@@ -24,6 +24,9 @@ import {
   SPACE_ROOM_PATH,
   SPACE_SEARCH_PATH,
   CREATE_PATH,
+  HOME_ROOM_FORUM_PATH,
+  DIRECT_ROOM_FORUM_PATH,
+  SPACE_ROOM_FORUM_PATH,
 } from './paths';
 import { trimLeadingSlash, trimTrailingSlash } from '../utils/common';
 import { HashRouterConfig } from '../hooks/useClientConfig';
@@ -101,6 +104,14 @@ export const getHomeRoomPath = (roomIdOrAlias: string, eventId?: string): string
   return generatePath(HOME_ROOM_PATH, params);
 };
 
+export const getHomeForumPath = (roomIdOrAlias: string): string => {
+  const params = {
+    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
+  };
+
+  return generatePath(HOME_ROOM_FORUM_PATH, params);
+};
+
 export const getDirectPath = (): string => DIRECT_PATH;
 export const getDirectCreatePath = (): string => DIRECT_CREATE_PATH;
 export const getDirectRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
@@ -110,6 +121,14 @@ export const getDirectRoomPath = (roomIdOrAlias: string, eventId?: string): stri
   };
 
   return generatePath(DIRECT_ROOM_PATH, params);
+};
+
+export const getDirectForumPath = (roomIdOrAlias: string): string => {
+  const params = {
+    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
+  };
+
+  return generatePath(DIRECT_ROOM_FORUM_PATH, params);
 };
 
 export const getSpacePath = (spaceIdOrAlias: string): string => {
@@ -143,6 +162,14 @@ export const getSpaceRoomPath = (
   };
 
   return generatePath(SPACE_ROOM_PATH, params);
+};
+export const getSpaceForumPath = (spaceIdOrAlias: string, roomIdOrAlias: string): string => {
+  const params = {
+    spaceIdOrAlias: encodeURIComponent(spaceIdOrAlias),
+    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
+  };
+
+  return generatePath(SPACE_ROOM_FORUM_PATH, params);
 };
 
 export const getExplorePath = (): string => EXPLORE_PATH;
