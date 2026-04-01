@@ -809,6 +809,9 @@ export const Message = as<'div', MessageProps>(
 
     const usernameColor = legacyUsernameColor ? colorMXID(senderId) : tagColor;
 
+    const pinnedEvents = useRoomPinnedEvents(room);
+    const isPinned = pinnedEvents.includes(mEvent.getId() ?? '');
+
     const headerJSX = !collapse && (
       <Box
         gap="300"
@@ -861,6 +864,11 @@ export const Message = as<'div', MessageProps>(
                 |
               </Text>
             </>
+          )}
+          {isPinned && (
+            <Text as="span" size="T200" priority="300">
+              <Icon size="50" src={Icons.Pin} style={{ opacity: 0.6, verticalAlign: 'middle' }} />
+            </Text>
           )}
           <Time
             ts={mEvent.getTs()}
