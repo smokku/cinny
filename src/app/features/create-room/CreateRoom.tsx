@@ -44,17 +44,20 @@ import { CreateRoomTypeSelector } from '../../components/create-room/CreateRoomT
 import { getRoomIconSrc } from '../../utils/room';
 
 const getCreateRoomAccessToIcon = (access: CreateRoomAccess, type?: CreateRoomType) => {
-  const isVoiceRoom = type === CreateRoomType.VoiceRoom;
+  let roomType: string | undefined;
+  if (type === CreateRoomType.VoiceRoom) roomType = RoomType.Call;
+  if (type === CreateRoomType.ForumRoom) roomType = RoomType.Forum;
 
   let joinRule: JoinRule = JoinRule.Public;
   if (access === CreateRoomAccess.Restricted) joinRule = JoinRule.Restricted;
   if (access === CreateRoomAccess.Private) joinRule = JoinRule.Knock;
 
-  return getRoomIconSrc(Icons, isVoiceRoom ? RoomType.Call : undefined, joinRule);
+  return getRoomIconSrc(Icons, roomType, joinRule);
 };
 
 const getCreateRoomTypeToIcon = (type: CreateRoomType) => {
   if (type === CreateRoomType.VoiceRoom) return Icons.VolumeHigh;
+  if (type === CreateRoomType.ForumRoom) return Icons.Message;
   return Icons.Hash;
 };
 
@@ -138,6 +141,7 @@ export function CreateRoomForm({
 
     let roomType: RoomType | undefined;
     if (type === CreateRoomType.VoiceRoom) roomType = RoomType.Call;
+    if (type === CreateRoomType.ForumRoom) roomType = RoomType.Forum;
 
     create({
       version: selectedRoomVersion,

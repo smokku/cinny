@@ -32,13 +32,20 @@ import { PageHeader } from '../../components/page';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
-import { StateEvent } from '../../../types/matrix/room';
+import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
-import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
+import {
+  getHomeSearchPath,
+  getSpaceSearchPath,
+  getHomeForumPath,
+  getDirectForumPath,
+  getSpaceForumPath,
+  withSearchParam,
+} from '../../pages/pathUtils';
 import { getCanonicalAliasOrRoomId, isRoomAlias, mxcUrlToHttp } from '../../utils/matrix';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
@@ -83,7 +90,9 @@ type RoomMenuProps = {
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
   const mx = useMatrixClient();
+  const navigate = useNavigate();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [developerTools] = useSetting(settingsAtom, 'developerTools');
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
@@ -93,6 +102,9 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
+  const parentSpace = useSpaceOptionally();
+  const isForum = room.getType() === RoomType.Forum;
+  const isDirectRoom = useIsDirectRoom();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
@@ -113,9 +125,21 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   };
 
   const openSettings = useOpenRoomSettings();
-  const parentSpace = useSpaceOptionally();
   const handleOpenSettings = () => {
     openSettings(room.roomId, parentSpace?.roomId);
+    requestClose();
+  };
+
+  const handleOpenForumView = () => {
+    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+    if (parentSpace) {
+      const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, parentSpace.roomId);
+      navigate(getSpaceForumPath(spaceIdOrAlias, roomIdOrAlias));
+    } else if (isDirectRoom) {
+      navigate(getDirectForumPath(roomIdOrAlias));
+    } else {
+      navigate(getHomeForumPath(roomIdOrAlias));
+    }
     requestClose();
   };
 
@@ -227,6 +251,18 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             </>
           )}
         </UseStateProvider>
+        {(isForum || developerTools) && (
+          <MenuItem
+            onClick={handleOpenForumView}
+            size="300"
+            after={<Icon size="100" src={Icons.Message} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              Forum View
+            </Text>
+          </MenuItem>
+        )}
       </Box>
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -501,7 +537,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
     return () => {
       room.removeListener(RoomEvent.Timeline, handleTimeline);
     };
-  }, [room, mx]);
+  }, [room]);
 
   useEffect(() => {
     const updateThreadCounts = () => {

@@ -15,6 +15,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Message Bookmarks with add, remove, and list functionality.
 - Sender and mention filters for message search.
 - Unread threads on the room list sidebar.
+- Forum-style room view with threads acting as topics.
 - Dedicated threads sidebar user interface.
 - Inline media galleries.
 - Extended user profiles, banners, nicknames, and extended presence handling.
