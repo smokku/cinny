@@ -730,6 +730,7 @@ export type MessageProps = {
   reactions?: ReactNode;
   hideReadReceipts?: boolean;
   hideThreadButton?: boolean;
+  hideReplyButton?: boolean;
   showDeveloperTools?: boolean;
   memberPowerTag?: MemberPowerTag;
   accessibleTagColors?: Map<string, string>;
@@ -762,6 +763,7 @@ export const Message = as<'div', MessageProps>(
       reactions,
       hideReadReceipts,
       hideThreadButton,
+      hideReplyButton,
       showDeveloperTools,
       memberPowerTag,
       accessibleTagColors,
@@ -1006,15 +1008,17 @@ export const Message = as<'div', MessageProps>(
                     </IconButton>
                   </PopOut>
                 )}
-                <IconButton
-                  onClick={onReplyClick}
-                  data-event-id={mEvent.getId()}
-                  variant="SurfaceVariant"
-                  size="300"
-                  radii="300"
-                >
-                  <Icon src={Icons.ReplyArrow} size="100" />
-                </IconButton>
+                {!hideReplyButton && (
+                  <IconButton
+                    onClick={onReplyClick}
+                    data-event-id={mEvent.getId()}
+                    variant="SurfaceVariant"
+                    size="300"
+                    radii="300"
+                  >
+                    <Icon src={Icons.ReplyArrow} size="100" />
+                  </IconButton>
+                )}
                 {!hideThreadButton && (
                   <IconButton
                     onClick={(ev) => onReplyClick(ev, true)}
@@ -1086,25 +1090,27 @@ export const Message = as<'div', MessageProps>(
                               onClose={closeMenu}
                             />
                           )}
-                          <MenuItem
-                            size="300"
-                            after={<Icon size="100" src={Icons.ReplyArrow} />}
-                            radii="300"
-                            data-event-id={mEvent.getId()}
-                            onClick={(evt: any) => {
-                              onReplyClick(evt);
-                              closeMenu();
-                            }}
-                          >
-                            <Text
-                              className={css.MessageMenuItemText}
-                              as="span"
-                              size="T300"
-                              truncate
+                          {!hideReplyButton && (
+                            <MenuItem
+                              size="300"
+                              after={<Icon size="100" src={Icons.ReplyArrow} />}
+                              radii="300"
+                              data-event-id={mEvent.getId()}
+                              onClick={(evt: any) => {
+                                onReplyClick(evt);
+                                closeMenu();
+                              }}
                             >
-                              Reply
-                            </Text>
-                          </MenuItem>
+                              <Text
+                                className={css.MessageMenuItemText}
+                                as="span"
+                                size="T300"
+                                truncate
+                              >
+                                Reply
+                              </Text>
+                            </MenuItem>
+                          )}
                           {!hideThreadButton && (
                             <MenuItem
                               size="300"

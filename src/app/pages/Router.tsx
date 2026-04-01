@@ -29,6 +29,7 @@ import {
   _ROOM_PATH,
   _SEARCH_PATH,
   _SERVER_PATH,
+  _ROOM_FORUM_PATH,
   CREATE_PATH,
 } from './paths';
 import {
@@ -50,6 +51,7 @@ import { BookmarksList } from './client/bookmarks';
 import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
 import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
+import { ForumView } from '../features/forum';
 import { WelcomePage } from './client/WelcomePage';
 import { SidebarNav } from './client/SidebarNav';
 import { PageRoot } from '../components/page';
@@ -183,6 +185,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
               </HomeRouteRoomProvider>
             }
           />
+          <Route
+            path={_ROOM_FORUM_PATH}
+            element={
+              <HomeRouteRoomProvider>
+                <ForumView />
+              </HomeRouteRoomProvider>
+            }
+          />
         </Route>
         <Route
           path={DIRECT_PATH}
@@ -205,6 +215,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             element={
               <DirectRouteRoomProvider>
                 <Room />
+              </DirectRouteRoomProvider>
+            }
+          />
+          <Route
+            path={_ROOM_FORUM_PATH}
+            element={
+              <DirectRouteRoomProvider>
+                <ForumView />
               </DirectRouteRoomProvider>
             }
           />
@@ -245,6 +263,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             element={
               <SpaceRouteRoomProvider>
                 <Room />
+              </SpaceRouteRoomProvider>
+            }
+          />
+          <Route
+            path={_ROOM_FORUM_PATH}
+            element={
+              <SpaceRouteRoomProvider>
+                <ForumView />
               </SpaceRouteRoomProvider>
             }
           />

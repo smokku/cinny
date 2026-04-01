@@ -34,6 +34,7 @@ import {
   getExplorePath,
   getHomeCreatePath,
   getHomeRoomPath,
+  getHomeForumPath,
   getHomeBookmarksPath,
   getHomeSearchPath,
   withSearchParam,
@@ -47,6 +48,7 @@ import {
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { RoomType } from '../../../../types/matrix/room';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomWithThreads } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
@@ -365,7 +367,11 @@ export function Home() {
                       <RoomWithThreads
                         room={room}
                         selected={selected}
-                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                        linkPath={
+                          room.getType() === RoomType.Forum
+                            ? getHomeForumPath(getCanonicalAliasOrRoomId(mx, roomId))
+                            : getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))
+                        }
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,
                           room.roomId

@@ -29,7 +29,8 @@ import {
   NavItem,
   NavItemContent,
 } from '../../../components/nav';
-import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
+import { getDirectCreatePath, getDirectRoomPath, getDirectForumPath } from '../../pathUtils';
+import { RoomType } from '../../../../types/matrix/room';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
@@ -264,7 +265,11 @@ export function Direct() {
                         selected={selected}
                         showAvatar
                         direct
-                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                        linkPath={
+                          room.getType() === RoomType.Forum
+                            ? getDirectForumPath(getCanonicalAliasOrRoomId(mx, roomId))
+                            : getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))
+                        }
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,
                           room.roomId

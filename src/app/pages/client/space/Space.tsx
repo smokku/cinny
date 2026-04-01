@@ -38,7 +38,12 @@ import {
   NavItemContent,
   NavLink,
 } from '../../../components/nav';
-import { getSpaceLobbyPath, getSpaceRoomPath, getSpaceSearchPath } from '../../pathUtils';
+import {
+  getSpaceLobbyPath,
+  getSpaceRoomPath,
+  getSpaceForumPath,
+  getSpaceSearchPath,
+} from '../../pathUtils';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import {
@@ -65,7 +70,7 @@ import { LeaveSpacePrompt } from '../../../components/leave-space-prompt';
 import { copyToClipboard } from '../../../utils/dom';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { useStateEvent } from '../../../hooks/useStateEvent';
-import { Membership, StateEvent } from '../../../../types/matrix/room';
+import { Membership, RoomType, StateEvent } from '../../../../types/matrix/room';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
@@ -436,8 +441,13 @@ export function Space() {
     closedCategories.has(categoryId)
   );
 
-  const getToLink = (roomId: string) =>
-    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId));
+  const getToLink = (roomId: string) => {
+    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
+    if (mx.getRoom(roomId)?.getType() === RoomType.Forum) {
+      return getSpaceForumPath(spaceIdOrAlias, roomIdOrAlias);
+    }
+    return getSpaceRoomPath(spaceIdOrAlias, roomIdOrAlias);
+  };
 
   return (
     <PageNav>
