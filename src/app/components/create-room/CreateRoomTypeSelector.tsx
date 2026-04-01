@@ -70,6 +70,32 @@ export function CreateRoomTypeSelector({
           </Box>
         </SettingTile>
       </SequenceCard>
+      <SequenceCard
+        style={{ padding: config.space.S300 }}
+        variant={value === CreateRoomType.ForumRoom ? 'Primary' : 'SurfaceVariant'}
+        direction="Column"
+        gap="100"
+        as="button"
+        type="button"
+        aria-pressed={value === CreateRoomType.ForumRoom}
+        onClick={() => onSelect(CreateRoomType.ForumRoom)}
+        disabled={disabled}
+      >
+        <SettingTile
+          before={<Icon size="400" src={getIcon(CreateRoomType.ForumRoom)} />}
+          after={value === CreateRoomType.ForumRoom && <Icon src={Icons.Check} />}
+        >
+          <Box gap="200" alignItems="Baseline">
+            <Text size="H6" style={{ flexShrink: 0 }}>
+              Forum Room
+            </Text>
+            <Text size="T300" priority="300" truncate>
+              - Conversations split in topics.
+            </Text>
+            <BetaNoticeBadge />
+          </Box>
+        </SettingTile>
+      </SequenceCard>
     </Box>
   );
 }

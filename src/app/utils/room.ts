@@ -293,6 +293,10 @@ export const getRoomIconSrc = (
     return icons.VolumeHigh;
   }
 
+  if (roomType === RoomType.Forum) {
+    return icons.Message;
+  }
+
   if (joinRule === JoinRule.Public) return icons.HashGlobe;
   if (
     joinRule === JoinRule.Invite ||

@@ -48,6 +48,7 @@ import { IReplyDraft, roomIdToReplyDraftAtomFamily } from '../../state/room/room
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { nicknamesAtom } from '../../state/nicknames';
 import { EncryptedContent, Message, Reactions } from './message';
+import { ThreadRootItem } from './ThreadRootItem';
 import { RoomInput } from './RoomInput';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import * as css from './ThreadDrawer.css';
@@ -78,6 +79,8 @@ type ThreadMessageProps = {
   jumpToEventId?: string;
   collapse?: boolean;
   previousEventId: string;
+  hideReactions?: boolean;
+  legacyUsernameColor?: boolean;
 };
 
 function ThreadMessage({
@@ -106,12 +109,14 @@ function ThreadMessage({
   onReferenceClick,
   jumpToEventId,
   previousEventId,
+  hideReactions,
+  legacyUsernameColor,
 }: ThreadMessageProps) {
   // Use the thread's own timeline set so reactions/edits on thread events are found correctly
   const threadTimelineSet = room.getThread(threadRootIdProp)?.timelineSet;
   const timelineSet = threadTimelineSet ?? room.getUnfilteredTimelineSet();
   const nicknames = useAtomValue(nicknamesAtom);
-  const mEventId = mEvent.getId()!;
+  const mEventId = mEvent.getId();
   const senderId = mEvent.getSender() ?? '';
   const senderDisplayName =
     getMemberDisplayName(room, senderId, nicknames) ?? getMxIdLocalPart(senderId) ?? senderId;
@@ -120,6 +125,8 @@ function ThreadMessage({
   const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
   const [encUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');
   const showUrlPreview = room.hasEncryptionStateEvent() ? encUrlPreview : urlPreview;
+
+  if (!mEventId) return null;
 
   const editedEvent = getEditedEvent(mEventId, mEvent, timelineSet);
   const editedNewContent = editedEvent?.getContent()['m.new_content'];
@@ -159,6 +166,7 @@ function ThreadMessage({
       dateFormatString={dateFormatString}
       hideReadReceipts={showHideReads}
       hideThreadButton
+      legacyUsernameColor={legacyUsernameColor}
       showDeveloperTools={showDeveloperTools}
       reply={
         replyEventId &&
@@ -172,7 +180,7 @@ function ThreadMessage({
         )
       }
       reactions={
-        hasReactions && reactionRelations ? (
+        !hideReactions && hasReactions && reactionRelations ? (
           <Reactions
             style={{ marginTop: config.space.S200 }}
             room={room}
@@ -276,6 +284,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
   const [showDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [showHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
 
@@ -360,16 +369,21 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
         forceUpdate((n) => n + 1);
       }
     };
-    const onThreadUpdate = () => forceUpdate((n) => n + 1);
+    const onThreadUpdate: RoomEventHandlerMap[ThreadEvent.Update] = () => {
+      forceUpdate((n) => n + 1);
+    };
+    const onThreadReply: RoomEventHandlerMap[ThreadEvent.NewReply] = () => {
+      forceUpdate((n) => n + 1);
+    };
     room.on(RoomEvent.Timeline, onTimeline);
     room.on(RoomEvent.Redaction, onRedaction);
-    (room as any).on(ThreadEvent.Update, onThreadUpdate);
-    (room as any).on(ThreadEvent.NewReply, onThreadUpdate);
+    room.on(ThreadEvent.Update, onThreadUpdate);
+    room.on(ThreadEvent.NewReply, onThreadReply);
     return () => {
       room.removeListener(RoomEvent.Timeline, onTimeline);
       room.removeListener(RoomEvent.Redaction, onRedaction);
-      (room as any).removeListener(ThreadEvent.Update, onThreadUpdate);
-      (room as any).removeListener(ThreadEvent.NewReply, onThreadUpdate);
+      room.removeListener(ThreadEvent.Update, onThreadUpdate);
+      room.removeListener(ThreadEvent.NewReply, onThreadReply);
     };
   }, [mx, room, threadRootId]);
 
@@ -587,6 +601,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
     htmlReactParserOptions,
     showHideReads: hideActivity,
     showDeveloperTools,
+    legacyUsernameColor,
     onReferenceClick: handleOpenReply,
     jumpToEventId,
   };
@@ -626,31 +641,32 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
 
       {/* Thread root message */}
       {rootEvent && (
-        <Scroll
-          variant="Background"
-          visibility="Hover"
-          direction="Vertical"
-          hideTrack={false}
-          style={{
-            maxHeight: '200px',
-            flexShrink: 0,
-            height: 'auto',
-          }}
-        >
-          <Box
-            className={css.messageList}
-            direction="Column"
-            style={{
-              padding: `${config.space.S200} 0`,
-            }}
-          >
-            <ThreadMessage
-              {...sharedMessageProps}
-              mEvent={rootEvent}
-              previousEventId={threadRootId}
-            />
-          </Box>
-        </Scroll>
+        <ThreadRootItem
+          room={room}
+          mEvent={rootEvent}
+          thread={room.getThread(threadRootId) ?? undefined}
+          editId={editId}
+          onEditId={handleEdit}
+          messageLayout={messageLayout}
+          messageSpacing={messageSpacing}
+          canDelete={canRedact || canDeleteOwn}
+          canSendReaction={canSendReaction}
+          canPinEvent={canPinEvent}
+          imagePackRooms={imagePackRooms}
+          hour24Clock={hour24Clock}
+          dateFormatString={dateFormatString}
+          onUserClick={handleUserClick}
+          onUsernameClick={handleUsernameClick}
+          onReplyClick={handleReplyClick}
+          onReactionToggle={handleReactionToggle}
+          linkifyOpts={linkifyOpts}
+          htmlReactParserOptions={htmlReactParserOptions}
+          showHideReads={hideActivity}
+          showDeveloperTools={showDeveloperTools}
+          onReferenceClick={handleOpenReply}
+          hideThreadButton
+          legacyUsernameColor={legacyUsernameColor}
+        />
       )}
 
       {/* Replies */}
