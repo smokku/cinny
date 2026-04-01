@@ -36,6 +36,8 @@ import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { MessageEvent, StateEvent } from '../../../types/matrix/room';
+import { markAsRead } from '../../utils/notifications';
+import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import {
@@ -232,6 +234,29 @@ export function ForumView() {
       });
   }, [room]);
 
+  // Mark main room timeline as read on mount (threads are untouched)
+  useEffect(() => {
+    markAsRead(mx, room.roomId, hideActivity);
+  }, [mx, room.roomId, hideActivity]);
+
+  // Ref to avoid re-subscribing event listeners when hideActivity changes
+  const hideActivityRef = useRef(hideActivity);
+  useEffect(() => {
+    hideActivityRef.current = hideActivity;
+  }, [hideActivity]);
+
+  // Mark as read when window/tab regains focus
+  useDocumentFocusChange(
+    useCallback(
+      (inFocus) => {
+        if (inFocus) {
+          markAsRead(mx, room.roomId, hideActivityRef.current);
+        }
+      },
+      [mx, room.roomId]
+    )
+  );
+
   // Re-render when threads or timeline change
   useEffect(() => {
     const createdThreads = new Set<string>();
@@ -274,6 +299,9 @@ export function ForumView() {
       if (reactionOrEditEvent(mEvent)) return;
       if (!mEvent.getContent()?.msgtype) return;
       forceUpdate((n) => n + 1);
+      if (document.hasFocus()) {
+        markAsRead(mx, room.roomId, hideActivityRef.current);
+      }
     };
     const onRedaction: RoomEventHandlerMap[RoomEvent.Redaction] = (mEvent) => {
       if (mEvent.threadRootId || mEvent.isThreadRoot) {
@@ -301,7 +329,7 @@ export function ForumView() {
     };
 
     return cleanup;
-  }, [room]);
+  }, [mx, room]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const posts = useMemo(() => collectForumPosts(room), [room, updateKey]);
