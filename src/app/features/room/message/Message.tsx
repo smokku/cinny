@@ -33,6 +33,7 @@ import React, {
 import FocusTrap from 'focus-trap-react';
 import { useHover, useFocusWithin } from 'react-aria';
 import { MatrixEvent, Room } from 'matrix-js-sdk';
+import { EventStatus } from 'matrix-js-sdk/lib/models/event-status';
 import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -81,6 +82,7 @@ import { useIsBookmarked, useBookmarkActions } from '../../bookmarks/useBookmark
 import { nicknamesAtom, setNicknameAtom } from '../../../state/nicknames';
 import { useUserProfile } from '../../../hooks/useUserProfile';
 import { useBlobCache } from '../../../hooks/useBlobCache';
+import { useEventSendStatus } from '../../../hooks/useEventSendStatus';
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -777,6 +779,9 @@ export const Message = as<'div', MessageProps>(
   ) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
+    const eventStatus = useEventSendStatus(mEvent);
+    const isFailed = eventStatus === EventStatus.NOT_SENT;
+    const isSending = eventStatus === EventStatus.SENDING || eventStatus === EventStatus.ENCRYPTING;
     const senderId = mEvent.getSender() ?? '';
     const nicknames = useAtomValue(nicknamesAtom);
     const setNickname = useSetAtom(setNicknameAtom);
@@ -864,6 +869,17 @@ export const Message = as<'div', MessageProps>(
                 |
               </Text>
             </>
+          )}
+          {isFailed && (
+            <Text
+              as="span"
+              size="T200"
+              style={{ color: color.Critical.Main, cursor: 'help' }}
+              title={mEvent.error?.message ?? 'Message failed to send'}
+            >
+              <Icon size="50" src={Icons.Warning} filled style={{ verticalAlign: 'middle' }} /> Not
+              sent
+            </Text>
           )}
           {isPinned && (
             <Text as="span" size="T200" priority="300">
@@ -960,10 +976,14 @@ export const Message = as<'div', MessageProps>(
       }, 100);
     };
 
+    if (eventStatus === EventStatus.CANCELLED) return null;
+
     return (
       <MessageBase
         className={classNames(css.MessageBase, className, {
           [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
+          [css.MessageFailed]: isFailed,
+          [css.MessageSending]: isSending,
         })}
         tabIndex={0}
         space={messageSpacing}
@@ -976,7 +996,34 @@ export const Message = as<'div', MessageProps>(
         {...focusWithinProps}
         ref={ref}
       >
-        {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
+        {!edit && isFailed && hover && (
+          <div className={css.MessageOptionsBase}>
+            <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
+              <Box gap="100">
+                <IconButton
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                  title="Retry"
+                  onClick={() => mx.resendEvent(mEvent, room)}
+                >
+                  <Icon src={Icons.Send} size="100" />
+                </IconButton>
+                <IconButton
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                  title="Remove"
+                  onClick={() => mx.cancelPendingEvent(mEvent)}
+                >
+                  <Icon src={Icons.Cross} size="100" style={{ color: color.Critical.Main }} />
+                </IconButton>
+                {showDeveloperTools && <MessageSourceCodeItem room={room} mEvent={mEvent} />}
+              </Box>
+            </Menu>
+          </div>
+        )}
+        {!edit && !isFailed && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
           <div className={css.MessageOptionsBase}>
             <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
               <Box gap="100">
