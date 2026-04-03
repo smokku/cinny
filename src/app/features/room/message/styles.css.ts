@@ -1,5 +1,5 @@
 import { style } from '@vanilla-extract/css';
-import { DefaultReset, config, toRem } from 'folds';
+import { DefaultReset, color, config, toRem } from 'folds';
 
 export const MessageBase = style({
   position: 'relative',
@@ -54,4 +54,13 @@ export const ReactionsContainer = style({
 
 export const ReactionsTooltipText = style({
   wordBreak: 'break-word',
+});
+
+export const MessageFailed = style({
+  opacity: 0.75,
+  boxShadow: `inset ${toRem(3)} 0 0 ${color.Critical.Main}`,
+});
+
+export const MessageSending = style({
+  opacity: 0.6,
 });
