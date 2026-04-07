@@ -2,6 +2,16 @@
   "defaultHomeserver": 1,
   "homeserverList": ["converser.eu", "matrix.org", "mozilla.org", "unredacted.org", "xmr.se"],
   "allowCustomHomeservers": true,
+<<<<<<< HEAD
+||||||| parent of 6e2215b5b (feat: add configurable registration token source URLs per homeserver in config.json)
+
+=======
+
+  "registrationTokenSources": {
+    "example.com": "https://example.com/tokens/get"
+  },
+
+>>>>>>> 6e2215b5b (feat: add configurable registration token source URLs per homeserver in config.json)
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
