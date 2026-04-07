@@ -34,6 +34,8 @@ export type ClientConfig = {
     servers?: string[];
   };
 
+  registrationTokenSources?: Record<string, string>;
+
   hashRouter?: HashRouterConfig;
 
   branding?: BrandingConfig;

@@ -2,6 +2,8 @@ import {
   Box,
   Button,
   Checkbox,
+  Icon,
+  Icons,
   Input,
   Overlay,
   OverlayBackdrop,
@@ -180,6 +182,7 @@ type PasswordRegisterFormProps = {
   defaultUsername?: string;
   defaultEmail?: string;
   defaultRegisterToken?: string;
+  tokenSourceUrl?: string;
 };
 export function PasswordRegisterForm({
   authData,
@@ -187,6 +190,7 @@ export function PasswordRegisterForm({
   defaultUsername,
   defaultEmail,
   defaultRegisterToken,
+  tokenSourceUrl,
 }: PasswordRegisterFormProps) {
   const clientConfig = useClientConfig();
   const branding = clientBranding(clientConfig);
@@ -351,6 +355,17 @@ export function PasswordRegisterForm({
               required={requiredStageInFlows(uiaFlows, AuthType.RegistrationToken)}
               outlined
             />
+            {tokenSourceUrl && (
+              <Box alignItems="Center" justifyContent="Start" gap="100">
+                <Icon size="100" src={Icons.Info} />
+                <Text as="span" size="T300" priority="300">
+                  Don&apos;t have a token?{' '}
+                  <a href={tokenSourceUrl} target="_blank" rel="noopener noreferrer">
+                    Get it here
+                  </a>
+                </Text>
+              </Box>
+            )}
           </Box>
         )}
         {hasStageInFlows(uiaFlows, AuthType.Email) && (

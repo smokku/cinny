@@ -3,6 +3,7 @@ import { Box, Text, color } from 'folds';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SSOAction } from 'matrix-js-sdk';
 import { useAuthServer } from '../../../hooks/useAuthServer';
+import { useClientConfig } from '../../../hooks/useClientConfig';
 import { RegisterFlowStatus, useAuthFlows } from '../../../hooks/useAuthFlows';
 import { useParsedLoginFlows } from '../../../hooks/useParsedLoginFlows';
 import { PasswordRegisterForm, SUPPORTED_REGISTER_STAGES } from '../register/PasswordRegisterForm';
@@ -25,6 +26,8 @@ const useRegisterSearchParams = (searchParams: URLSearchParams): RegisterPathSea
 
 export function Register() {
   const server = useAuthServer();
+  const clientConfig = useClientConfig();
+  const tokenSourceUrl = clientConfig.registrationTokenSources?.[server];
   const { loginFlows, registerFlows } = useAuthFlows();
   const [searchParams] = useSearchParams();
   const registerSearchParams = useRegisterSearchParams(searchParams);
@@ -71,6 +74,7 @@ export function Register() {
                   defaultUsername={registerSearchParams.username}
                   defaultEmail={registerSearchParams.email}
                   defaultRegisterToken={registerSearchParams.token}
+                  tokenSourceUrl={tokenSourceUrl}
                 />
               )
             }
