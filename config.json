@@ -3,6 +3,10 @@
   "homeserverList": ["converser.eu", "matrix.org", "mozilla.org", "unredacted.org", "xmr.se"],
   "allowCustomHomeservers": true,
 
+  "registrationTokenSources": {
+    "example.com": "https://example.com/tokens/get"
+  },
+
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
