@@ -29,6 +29,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Show active bridges in members drawer.
 - Pinned message indicator in message list.
 - Branding support via config.json.
+- Configurable registration token source URLs per homeserver via config.json.
 
 ## Changed
 
