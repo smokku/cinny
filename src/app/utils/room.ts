@@ -326,15 +326,13 @@ export const getDirectRoomAvatarUrl = (
   size: 32 | 96 = 32,
   useAuthentication = false
 ): string | undefined => {
+  const roomAvatarUrl = getRoomAvatarUrl(mx, room, size, useAuthentication);
+  if (roomAvatarUrl) return roomAvatarUrl;
+
   const mxcUrl = room.getAvatarFallbackMember()?.getMxcAvatarUrl();
-
-  if (!mxcUrl) {
-    return getRoomAvatarUrl(mx, room, size, useAuthentication);
-  }
-
-  return (
-    mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
-  );
+  return mxcUrl
+    ? mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
+    : undefined;
 };
 
 export const trimReplyFromBody = (body: string): string => {
