@@ -1,9 +1,9 @@
 import React, { MouseEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Header, Icon, IconButton, Icons, Scroll, Text, config } from 'folds';
+import { Box, Header, Icon, IconButton, Icons, Scroll, Spinner, Text, config } from 'folds';
 import { RelationType } from 'matrix-js-sdk/lib/@types/event';
 import { ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
 import { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
-import { NotificationCountType } from 'matrix-js-sdk';
+import { Direction, IEvent, NotificationCountType } from 'matrix-js-sdk';
 import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk/lib/models/room';
 import { ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -33,6 +33,7 @@ import { getMxIdLocalPart, toggleReaction } from '../../utils/matrix';
 import { minuteDifference } from '../../utils/time';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { useMessageEdit } from '../../hooks/useMessageEdit';
 import { MessageLayout, MessageSpacing, settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { createMentionElement, moveCursor, useEditor } from '../../components/editor';
@@ -266,12 +267,17 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   const mx = useMatrixClient();
   const drawerRef = useRef<HTMLDivElement>(null);
   const editor = useEditor();
-  const [, forceUpdate] = useState(0);
-  const [editId, setEditId] = useState<string | undefined>(undefined);
+  const [forceUpdateCounter, forceUpdate] = useState(0);
+  const { editId, handleEdit } = useMessageEdit(editor);
   const [jumpToEventId, setJumpToEventId] = useState<string | undefined>(undefined);
+  const [loadingOlderReplies, setLoadingOlderReplies] = useState(false);
+  const [canPageBack, setCanPageBack] = useState(true);
+  const paginatingOlderRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevReplyCountRef = useRef(0);
   const replyEventsRef = useRef<MatrixEvent[]>([]);
+  const serverFetchAttemptedRef = useRef<string | null>(null);
+  const autoFillInProgressRef = useRef(false);
   const useAuthentication = useMediaAuthentication();
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
@@ -331,7 +337,78 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   // User profile popup
   const openUserRoomProfile = useOpenUserRoomProfile();
 
-  const rootEvent = room.findEventById(threadRootId);
+  // Prefer the event from the main timeline (already indexed), but fall back
+  // to thread.rootEvent — populated from bundled /threads server data even
+  // when the root is outside the currently-loaded timeline window.
+  const thread = room.getThread(threadRootId);
+  const rootEvent = room.findEventById(threadRootId) ?? thread?.rootEvent;
+
+  // Ensure the Thread object exists and has its reply events loaded. Handles
+  // three cases:
+  //   A) No Thread yet — create a shell from the local root, or fetch the root
+  //      from the server and then create the shell (for threads outside the
+  //      current sliding-sync window).
+  //   B) Thread exists but SDK is still initialising — no-op, the SDK will
+  //      populate it asynchronously and fire ThreadEvent.Update.
+  //   C) Thread initialised but empty — backfill from the main room timeline
+  //      (classic sync path) or paginate the thread's own timeline (server-
+  //      side threads).
+  useEffect(() => {
+    if (!room.getThread(threadRootId)) {
+      const localRoot = room.findEventById(threadRootId);
+      if (localRoot) {
+        room.createThread(threadRootId, localRoot, [], false);
+      } else {
+        mx.fetchRoomEvent(room.roomId, threadRootId)
+          .then((rawEvt: Partial<IEvent>) => {
+            if (room.getThread(threadRootId)) return;
+            room.createThread(threadRootId, new MatrixEvent(rawEvt as IEvent), [], false);
+            forceUpdate((n) => n + 1);
+          })
+          .catch(() => {
+            // root not reachable — drawer will render the empty fallback
+          });
+      }
+    }
+
+    const currThread = room.getThread(threadRootId);
+    if (!currThread || !currThread.initialEventsFetched) return;
+
+    const hasRepliesInThread = currThread.events.some(
+      (ev: MatrixEvent) => ev.getId() !== threadRootId && !reactionOrEditEvent(ev)
+    );
+    if (hasRepliesInThread) return;
+
+    const liveEvents = room
+      .getUnfilteredTimelineSet()
+      .getLiveTimeline()
+      .getEvents()
+      .filter(
+        (ev: MatrixEvent) =>
+          ev.threadRootId === threadRootId &&
+          ev.getId() !== threadRootId &&
+          !reactionOrEditEvent(ev)
+      );
+    if (liveEvents.length > 0) {
+      // thread.addEvents() is typed as void but internally async; schedule
+      // forceUpdate in a microtask so the timeline has been updated first.
+      currThread.addEvents(liveEvents, false);
+      Promise.resolve().then(() => forceUpdate((n) => n + 1));
+      return;
+    }
+
+    if (serverFetchAttemptedRef.current === threadRootId) return;
+    serverFetchAttemptedRef.current = threadRootId;
+
+    mx.paginateEventTimeline(currThread.timelineSet.getLiveTimeline(), { backwards: true })
+      .then(() => forceUpdate((n) => n + 1))
+      .catch(() => {
+        // pagination may fail on homeservers without server-side thread support
+      });
+    // forceUpdateCounter must be in deps so this effect re-runs after
+    // ThreadEvent.Update fires (which flips initialEventsFetched from false
+    // to true).
+  }, [mx, room, threadRootId, forceUpdateCounter]);
 
   // Re-render when new thread events arrive (including reactions via ThreadEvent.Update).
   useEffect(() => {
@@ -391,7 +468,6 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
   // Fall back to scanning the live room timeline for local echoes and the
   // window before the Thread object is registered by the SDK.
   const { allReplies, visibleReplies, redactedCount } = (() => {
-    const thread = room.getThread(threadRootId);
     const fromThread = thread?.events ?? [];
     if (fromThread.length > 0) {
       return getThreadReplies(fromThread, threadRootId);
@@ -411,13 +487,57 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
 
   replyEventsRef.current = replyEvents;
 
+  const isThreadLoading = !!thread && !thread.initialEventsFetched && replyEvents.length === 0;
+
+  const hasOlderReplies =
+    canPageBack &&
+    !!thread?.initialEventsFetched &&
+    thread.timelineSet.getLiveTimeline().getPaginationToken(Direction.Backward) != null;
+
+  const hasOlderRepliesRef = useRef(hasOlderReplies);
+  hasOlderRepliesRef.current = hasOlderReplies;
+
+  const loadOlderReplies = useCallback(() => {
+    const t = room.getThread(threadRootId);
+    if (!t || !t.initialEventsFetched || paginatingOlderRef.current) return;
+    paginatingOlderRef.current = true;
+    setLoadingOlderReplies(true);
+    mx.paginateEventTimeline(t.timelineSet.getLiveTimeline(), { backwards: true })
+      .then((hasMore: boolean) => {
+        paginatingOlderRef.current = false;
+        if (!hasMore) setCanPageBack(false);
+        setLoadingOlderReplies(false);
+        forceUpdate((n) => n + 1);
+      })
+      .catch(() => {
+        paginatingOlderRef.current = false;
+        setLoadingOlderReplies(false);
+      });
+  }, [mx, room, threadRootId]);
+
+  const loadOlderRepliesRef = useRef(loadOlderReplies);
+  loadOlderRepliesRef.current = loadOlderReplies;
+
+  useEffect(() => {
+    setCanPageBack(true);
+    autoFillInProgressRef.current = false;
+  }, [threadRootId]);
+
+  const handleRepliesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < 200 && hasOlderRepliesRef.current && !paginatingOlderRef.current) {
+      loadOlderRepliesRef.current();
+    }
+  }, []);
+
   // Mark thread as read when viewing it and when new messages arrive
   useEffect(() => {
     const markThreadAsRead = async () => {
-      const thread = room.getThread(threadRootId);
-      if (!thread) return;
+      const currentThread = room.getThread(threadRootId);
+      if (!currentThread) return;
 
-      const events = thread.events || [];
+      const events = currentThread.events || [];
       if (events.length === 0) return;
 
       const lastEvent = events[events.length - 1];
@@ -429,7 +549,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
       const userId = mx.getUserId();
       if (!userId) return;
 
-      const readUpToId = thread.getEventReadUpTo(userId, false);
+      const readUpToId = currentThread.getEventReadUpTo(userId, false);
       const lastEventId = lastEvent.getId();
       const hasServerUnread =
         room.getThreadUnreadNotificationCount(threadRootId, NotificationCountType.Total) > 0 ||
@@ -451,16 +571,37 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
     markThreadAsRead();
   }, [mx, room, threadRootId, replyEvents.length, hideActivity]);
 
-  // Auto-scroll to bottom when event count grows (if the user is near the bottom).
+  // Auto-scroll to bottom when event count grows (if the user is near the
+  // bottom).  During back-pagination we stay pinned to the bottom too, so the
+  // auto-fill loop doesn't visibly jump while filling the viewport.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-    if (prevReplyCountRef.current === 0 || isAtBottom) {
+    if (prevReplyCountRef.current === 0 || isAtBottom || autoFillInProgressRef.current) {
       el.scrollTop = el.scrollHeight;
     }
     prevReplyCountRef.current = replyEvents.length;
   }, [replyEvents.length]);
+
+  // Auto-fill viewport: paginate backwards until the content overflows the
+  // scroll container, then stop.  The scroll handler (handleRepliesScroll)
+  // takes over once the user scrolls back up past the top threshold.
+  useEffect(() => {
+    if (paginatingOlderRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (!hasOlderReplies) {
+      autoFillInProgressRef.current = false;
+      return;
+    }
+    if (el.scrollHeight <= el.clientHeight) {
+      autoFillInProgressRef.current = true;
+      loadOlderRepliesRef.current();
+    } else {
+      autoFillInProgressRef.current = false;
+    }
+  }, [replyEvents.length, hasOlderReplies]);
 
   const handleUserClick: MouseEventHandler<HTMLButtonElement> = useCallback(
     (evt) => {
@@ -551,16 +692,29 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
     [mx, room, threadRootId]
   );
 
-  const handleEdit = useCallback(
-    (evtId?: string) => {
-      setEditId(evtId);
-      if (!evtId) {
-        ReactEditor.focus(editor);
-        moveCursor(editor);
+  const handleEditLastMessage = useCallback(() => {
+    const userId = mx.getUserId();
+    const ownReply = [...replyEventsRef.current]
+      .reverse()
+      .find(
+        (e) =>
+          e.getId() !== threadRootId &&
+          e.getSender() === userId &&
+          !e.isRedacted() &&
+          !reactionOrEditEvent(e)
+      );
+    const ownId = ownReply?.getId();
+    if (ownId) {
+      handleEdit(ownId);
+      const el = drawerRef.current;
+      if (el) {
+        el.querySelector(`[data-message-id="${ownId}"]`)?.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth',
+        });
       }
-    },
-    [editor]
-  );
+    }
+  }, [mx, threadRootId, handleEdit]);
 
   const handleOpenReply: MouseEventHandler<HTMLButtonElement> = useCallback(
     (evt) => {
@@ -677,58 +831,84 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
           visibility="Hover"
           direction="Vertical"
           hideTrack
+          onScroll={handleRepliesScroll}
           style={{ flexGrow: 1 }}
         >
-          {replyEvents.length === 0 ? (
-            <Box
-              direction="Column"
-              alignItems="Center"
-              justifyContent="Center"
-              style={{ padding: config.space.S400, gap: config.space.S200 }}
-            >
-              <Icon size="400" src={Icons.Thread} />
-              <Text size="T300" align="Center">
-                No replies yet. Start the thread below!
-              </Text>
-            </Box>
-          ) : (
-            <>
-              {/* Reply count label inside scroll area */}
-              <Box
-                style={{
-                  padding: `${config.space.S200} ${config.space.S400}`,
-                  flexShrink: 0,
-                }}
-              >
-                <Text size="T300" priority="300">
-                  {formatThreadReplyCount(displayCount, redactedCount)}
-                </Text>
-              </Box>
-              <Box
-                className={css.messageList}
-                direction="Column"
-                style={{ padding: `${config.space.S600} 0` }}
-              >
-                {replyEvents.map((mEvent, i) => {
-                  const prevEvent = i > 0 ? replyEvents[i - 1] : undefined;
-                  const collapse =
-                    prevEvent !== undefined &&
-                    prevEvent.getSender() === mEvent.getSender() &&
-                    prevEvent.getType() === mEvent.getType() &&
-                    minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
-                  return (
-                    <ThreadMessage
-                      key={mEvent.getId()}
-                      {...sharedMessageProps}
-                      mEvent={mEvent}
-                      collapse={collapse}
-                      previousEventId={prevEvent?.getId() ?? threadRootId}
-                    />
-                  );
-                })}
-              </Box>
-            </>
-          )}
+          {(() => {
+            if (isThreadLoading) {
+              return (
+                <Box
+                  direction="Column"
+                  alignItems="Center"
+                  justifyContent="Center"
+                  style={{ padding: config.space.S400 }}
+                >
+                  <Spinner variant="Secondary" size="400" />
+                </Box>
+              );
+            }
+            if (replyEvents.length === 0) {
+              return (
+                <Box
+                  direction="Column"
+                  alignItems="Center"
+                  justifyContent="Center"
+                  style={{ padding: config.space.S400, gap: config.space.S200 }}
+                >
+                  <Icon size="400" src={Icons.Thread} />
+                  <Text size="T300" align="Center">
+                    No replies yet. Start the thread below!
+                  </Text>
+                </Box>
+              );
+            }
+            return (
+              <>
+                {loadingOlderReplies && (
+                  <Box
+                    justifyContent="Center"
+                    style={{ padding: config.space.S300, flexShrink: 0 }}
+                  >
+                    <Spinner variant="Secondary" size="200" />
+                  </Box>
+                )}
+                {/* Reply count label inside scroll area */}
+                <Box
+                  style={{
+                    padding: `${config.space.S200} ${config.space.S400}`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Text size="T300" priority="300">
+                    {formatThreadReplyCount(displayCount, redactedCount)}
+                  </Text>
+                </Box>
+                <Box
+                  className={css.messageList}
+                  direction="Column"
+                  style={{ padding: `${config.space.S600} 0` }}
+                >
+                  {replyEvents.map((mEvent, i) => {
+                    const prevEvent = i > 0 ? replyEvents[i - 1] : undefined;
+                    const collapse =
+                      prevEvent !== undefined &&
+                      prevEvent.getSender() === mEvent.getSender() &&
+                      prevEvent.getType() === mEvent.getType() &&
+                      minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
+                    return (
+                      <ThreadMessage
+                        key={mEvent.getId()}
+                        {...sharedMessageProps}
+                        mEvent={mEvent}
+                        collapse={collapse}
+                        previousEventId={prevEvent?.getId() ?? threadRootId}
+                      />
+                    );
+                  })}
+                </Box>
+              </>
+            );
+          })()}
         </Scroll>
       </Box>
 
@@ -742,6 +922,7 @@ export function ThreadDrawer({ room, threadRootId, onClose, overlay }: ThreadDra
             threadRootId={threadRootId}
             editor={editor}
             fileDropContainerRef={drawerRef}
+            onEditLastMessage={handleEditLastMessage}
           />
         </div>
         {hideActivity ? (
