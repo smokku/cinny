@@ -152,9 +152,16 @@ interface RoomInputProps {
   roomId: string;
   room: Room;
   threadRootId?: string;
+  /**
+   * Optional handler invoked when the user presses ArrowUp in an empty editor,
+   * used by the thread drawer to edit the user's last own message in that
+   * thread (the main timeline wires this up via `useKeyDown` at the window
+   * level instead).
+   */
+  onEditLastMessage?: () => void;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, fileDropContainerRef, roomId, room, threadRootId }, ref) => {
+  ({ editor, fileDropContainerRef, roomId, room, threadRootId, onEditLastMessage }, ref) => {
     const draftKey = threadRootId ?? roomId;
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
@@ -518,6 +525,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           evt.preventDefault();
           submit();
         }
+        if (onEditLastMessage && isKeyHotkey('arrowup', evt) && isEmptyEditor(editor)) {
+          const { selection } = editor;
+          if (selection && Editor.isStart(editor, selection.anchor, [])) {
+            evt.preventDefault();
+            onEditLastMessage();
+            return;
+          }
+        }
         if (isKeyHotkey('escape', evt)) {
           evt.preventDefault();
           if (autocompleteQuery) {
@@ -527,7 +542,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           setReplyDraft(undefined);
         }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [
+        submit,
+        setReplyDraft,
+        enterForNewline,
+        autocompleteQuery,
+        isComposing,
+        editor,
+        onEditLastMessage,
+      ]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(

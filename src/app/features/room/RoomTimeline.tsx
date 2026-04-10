@@ -17,8 +17,10 @@ import {
   EventTimelineSet,
   EventTimelineSetHandlerMap,
   IContent,
+  IThreadBundledRelationship,
   MatrixClient,
   MatrixEvent,
+  NotificationCountType,
   RelationType,
   Room,
   RoomEvent,
@@ -48,14 +50,14 @@ import {
   config,
   toRem,
 } from 'folds';
-import { isKeyHotkey } from 'is-hotkey';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useTranslation } from 'react-i18next';
 import { getMxIdLocalPart, mxcUrlToHttp, toggleReaction } from '../../utils/matrix';
+import { countThreadUnread } from '../../utils/thread';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useVirtualPaginator, ItemRange } from '../../hooks/useVirtualPaginator';
 import { useAlive } from '../../hooks/useAlive';
-import { editableActiveElement, scrollToBottom } from '../../utils/dom';
+import { scrollToBottom } from '../../utils/dom';
 import {
   DefaultPlaceholder,
   CompactPlaceholder,
@@ -106,12 +108,11 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { getResizeObserverEntry, useResizeObserver } from '../../hooks/useResizeObserver';
 import * as css from './RoomTimeline.css';
 import { inSameDay, minuteDifference, timeDayMonthYear, today, yesterday } from '../../utils/time';
-import { createMentionElement, isEmptyEditor, moveCursor } from '../../components/editor';
+import { createMentionElement, moveCursor } from '../../components/editor';
 import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
 import { roomIdToOpenThreadAtomFamily } from '../../state/room/roomToOpenThread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
-import { useKeyDown } from '../../hooks/useKeyDown';
 import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { Image } from '../../components/media';
@@ -135,6 +136,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { UserAvatar } from '../../components/user-avatar';
+import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { nicknamesAtom } from '../../state/nicknames';
 import { profilesCacheAtom } from '../../state/userRoomProfile';
 
@@ -239,6 +241,15 @@ type RoomTimelineProps = {
   eventId?: string;
   roomInputRef: RefObject<HTMLElement>;
   editor: Editor;
+  /**
+   * Ref populated by `RoomTimeline` with a function that activates edit mode
+   * for the current user's most recent editable message in the main timeline.
+   * Wired from `RoomView` into the main `RoomInput`'s `onEditLastMessage` prop
+   * so that ArrowUp in an empty editor enters edit mode — but only for the
+   * editor that's actually focused, avoiding the drawer/main cross-talk that
+   * a window-level `keydown` listener caused.
+   */
+  onEditLastMessageRef?: React.MutableRefObject<(() => void) | undefined>;
 };
 
 const PAGINATION_LIMIT = 80;
@@ -433,7 +444,14 @@ const getThreadReplyCount = (
   fallbackCounts?: Map<string, number>
 ): number => {
   const thread = room.getThread(eventId);
-  if (thread) return thread.length;
+  if (thread) {
+    // Prefer the server-authoritative bundled aggregation so threads whose
+    // replies are outside the current local timeline window still report a
+    // non-zero count before the drawer is opened and paginated.
+    const bundledCount =
+      thread.rootEvent?.getServerAggregatedRelation<IThreadBundledRelationship>('m.thread')?.count;
+    return Math.max(bundledCount ?? 0, thread.length);
+  }
   if (fallbackCounts) return fallbackCounts.get(eventId) ?? 0;
   return buildThreadReplyCountMap(room).get(eventId) ?? 0;
 };
@@ -454,6 +472,32 @@ function ThreadReplyChip({
   const nicknames = useAtomValue(nicknamesAtom);
 
   const thread = room.getThread(mEventId);
+
+  // Force re-render when thread events arrive (new replies, edits, redactions),
+  // or when the per-thread notification counters change. Without this the chip
+  // shows stale counts until the parent Message re-renders for other reasons.
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const onUpdate = () => forceUpdate((n) => n + 1);
+    const onUnread = (_count: unknown, threadId?: string) => {
+      if (!threadId || threadId === mEventId) forceUpdate((n) => n + 1);
+    };
+    if (thread) {
+      thread.on(ThreadEvent.NewReply as any, onUpdate);
+      thread.on(ThreadEvent.Update as any, onUpdate);
+    }
+    room.on(RoomEvent.Redaction, onUpdate);
+    room.on(RoomEvent.UnreadNotifications as any, onUnread);
+    return () => {
+      if (thread) {
+        thread.off(ThreadEvent.NewReply as any, onUpdate);
+        thread.off(ThreadEvent.Update as any, onUpdate);
+      }
+      room.off(RoomEvent.Redaction, onUpdate);
+      room.off(RoomEvent.UnreadNotifications as any, onUnread);
+    };
+  }, [room, thread, mEventId]);
+
   const threadEvents = thread
     ? thread.events
     : room
@@ -464,10 +508,16 @@ function ThreadReplyChip({
 
   const { allReplies, visibleReplies, redactedCount } = getThreadReplies(threadEvents, mEventId);
 
-  const replyCount = thread ? thread.length : allReplies.length;
+  // Prefer the server-authoritative bundled count so threads that have replies
+  // outside the current local window still report the correct total before the
+  // drawer is opened and paginated.
+  const bundledCount =
+    thread?.rootEvent?.getServerAggregatedRelation<IThreadBundledRelationship>('m.thread')?.count;
+  const localCount = thread ? thread.length : allReplies.length;
+  const replyCount = Math.max(bundledCount ?? 0, localCount);
   if (replyCount === 0 && allReplies.length === 0) return null;
 
-  const displayCount = visibleReplies.length;
+  const displayCount = Math.max(bundledCount ?? 0, visibleReplies.length);
 
   const uniqueSenders = [
     ...new Set(visibleReplies.map((ev) => ev.getSender()).filter((id): id is string => !!id)),
@@ -481,6 +531,22 @@ function ThreadReplyChip({
     latestSenderId;
   const latestBody = (latestReply?.getContent()?.body as string | undefined) ?? '';
   const isOpen = openThreadId === mEventId;
+
+  // Thread unread badge: prefer server per-thread notification counts when
+  // available; fall back to scanning local thread events vs. the thread's
+  // read marker for homeservers that don't publish per-thread counts.  The
+  // fallback cannot produce a count, only presence — the badge renders as a
+  // dot in that case.
+  const userId = mx.getUserId();
+  const serverTotal = room.getThreadUnreadNotificationCount(mEventId, NotificationCountType.Total);
+  let unreadHighlight =
+    room.getThreadUnreadNotificationCount(mEventId, NotificationCountType.Highlight) > 0;
+  let hasUnread = serverTotal > 0 || unreadHighlight;
+  if (!hasUnread && thread && userId) {
+    const fallback = countThreadUnread(thread, userId);
+    hasUnread = fallback.hasUnread;
+    unreadHighlight = fallback.highlight;
+  }
 
   return (
     <Chip
@@ -522,6 +588,11 @@ function ThreadReplyChip({
       <Text size="T300" style={{ whiteSpace: 'nowrap' }}>
         {formatThreadReplyCount(displayCount, redactedCount)}
       </Text>
+      {hasUnread && (
+        <UnreadBadgeCenter>
+          <UnreadBadge highlight={unreadHighlight} count={serverTotal} />
+        </UnreadBadgeCenter>
+      )}
       {latestBody && (
         <Text
           size="T300"
@@ -582,7 +653,13 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
   };
 };
 
-export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
+export function RoomTimeline({
+  room,
+  eventId,
+  roomInputRef,
+  editor,
+  onEditLastMessageRef,
+}: RoomTimelineProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -991,29 +1068,23 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     )
   );
 
-  // Handle up arrow edit
-  useKeyDown(
-    window,
-    useCallback(
-      (evt) => {
-        if (
-          isKeyHotkey('arrowup', evt) &&
-          editableActiveElement() &&
-          document.activeElement?.getAttribute('data-editable-name') === 'RoomInput' &&
-          isEmptyEditor(editor)
-        ) {
-          const editableEvt = getLatestEditableEvt(room.getLiveTimeline(), (mEvt) =>
-            canEditEvent(mx, mEvt)
-          );
-          const editableEvtId = editableEvt?.getId();
-          if (!editableEvtId) return;
-          setEditId(editableEvtId);
-          evt.preventDefault();
-        }
-      },
-      [mx, room, editor]
-    )
-  );
+  // Populate the ref passed down from RoomView so the main RoomInput can
+  // invoke edit-last-message via its own keydown handler.  A window-level
+  // listener would fire for keypresses inside the thread drawer too.
+  useEffect(() => {
+    const ref = onEditLastMessageRef;
+    if (!ref) return () => undefined;
+    ref.current = () => {
+      const editableEvt = getLatestEditableEvt(room.getLiveTimeline(), (mEvt) =>
+        canEditEvent(mx, mEvt)
+      );
+      const editableEvtId = editableEvt?.getId();
+      if (editableEvtId) setEditId(editableEvtId);
+    };
+    return () => {
+      ref.current = undefined;
+    };
+  }, [onEditLastMessageRef, mx, room]);
 
   useEffect(() => {
     if (eventId) {
