@@ -33,6 +33,7 @@ import {
 import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
+import { getThreadUnreadCounts } from '../../utils/thread';
 import { roomToParentsAtom } from './roomToParents';
 
 const STABLE_UNREAD_THREAD_NOTIFICATIONS = 'unread_thread_notifications';
@@ -75,6 +76,7 @@ type ReceiptTargets = {
 type ThreadUnreadCounts = {
   total: number;
   highlight: number;
+  hasUnread: boolean;
 };
 
 type ThreadUnreadLike = {
@@ -266,11 +268,12 @@ const deleteRoomThreadUnread = (roomToThreadUnread: RoomToThreadUnread, roomId: 
 const shouldKeepThreadUnread = (
   notificationType: NotificationType,
   total: number,
-  highlight: number
+  highlight: number,
+  hasUnread: boolean
 ): boolean => {
   if (notificationType === NotificationType.Mute) return false;
   if (notificationType === NotificationType.MentionsAndKeywords) return highlight > 0;
-  return total > 0;
+  return total > 0 || hasUnread;
 };
 
 const getReceiptTargets = (content: ReceiptContentLike, myUserId: string): ReceiptTargets => {
@@ -315,8 +318,8 @@ const rebuildThreadUnreadMap = <T extends ThreadUnreadLike>(
   const nextRoomThreads = new Map<string, T>();
 
   Array.from(new Set(threadIds)).forEach((threadId) => {
-    const { total, highlight } = getThreadCounts(threadId);
-    if (!shouldKeepThreadUnread(notificationType, total, highlight)) return;
+    const { total, highlight, hasUnread } = getThreadCounts(threadId);
+    if (!shouldKeepThreadUnread(notificationType, total, highlight, hasUnread)) return;
 
     nextRoomThreads.set(threadId, {
       total,
@@ -339,7 +342,10 @@ const createThreadUnread = (
   notificationType: NotificationType,
   getNextOrder: () => number
 ): ThreadUnread | undefined => {
-  if (!shouldKeepThreadUnread(notificationType, total, highlight)) {
+  // Server-persisted counts are already authoritative: if the server
+  // reports anything non-zero, we have unread.
+  const hasUnread = total > 0 || highlight > 0;
+  if (!shouldKeepThreadUnread(notificationType, total, highlight, hasUnread)) {
     return undefined;
   }
 
@@ -355,37 +361,34 @@ const createRoomThreadUnread = (
   threadId: string,
   previousRoomThreads: Map<string, ThreadUnread> | undefined,
   getNextOrder: () => number
-): ThreadUnread | undefined =>
-  rebuildThreadUnreadMap(
+): ThreadUnread | undefined => {
+  const myUserId = room.client.getUserId();
+  if (!myUserId) return undefined;
+  return rebuildThreadUnreadMap(
     [threadId],
-    (targetThreadId) => ({
-      total: room.getThreadUnreadNotificationCount(targetThreadId, NotificationCountType.Total),
-      highlight: room.getThreadUnreadNotificationCount(
-        targetThreadId,
-        NotificationCountType.Highlight
-      ),
-    }),
+    (targetThreadId) => getThreadUnreadCounts(room, targetThreadId, myUserId),
     getNotificationType(room.client, room.roomId),
     previousRoomThreads,
     getNextOrder
   ).get(threadId);
+};
 
 const rebuildRoomThreadUnread = (
   room: Room,
   threadIds: Iterable<string>,
   previousRoomThreads: Map<string, ThreadUnread> | undefined,
   getNextOrder: () => number
-): Map<string, ThreadUnread> =>
-  rebuildThreadUnreadMap(
+): Map<string, ThreadUnread> => {
+  const myUserId = room.client.getUserId();
+  if (!myUserId) return new Map();
+  return rebuildThreadUnreadMap(
     threadIds,
-    (threadId) => ({
-      total: room.getThreadUnreadNotificationCount(threadId, NotificationCountType.Total),
-      highlight: room.getThreadUnreadNotificationCount(threadId, NotificationCountType.Highlight),
-    }),
+    (threadId) => getThreadUnreadCounts(room, threadId, myUserId),
     getNotificationType(room.client, room.roomId),
     previousRoomThreads,
     getNextOrder
   );
+};
 
 const getSavedThreadUnread = async (
   mx: MatrixClient,
@@ -569,9 +572,50 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   }, [mx, setUnreadAtom]);
 
   const seedThreadUnread = useCallback(async (): Promise<void> => {
+    const seeded = await getSavedThreadUnread(mx, getNextThreadOrder);
+
+    // Layer client-side fallback entries on top of the server-reported map
+    // for homeservers that don't publish per-thread notification counters.
+    // Scope: only covers rooms whose Thread objects are already hydrated in
+    // the SDK.  Older-than-initial-sync threads in unvisited rooms will
+    // appear later when the user opens those rooms' thread browser.
+    const myUserId = mx.getUserId();
+    if (myUserId) {
+      mx.getRooms().forEach((room) => {
+        if (room.isSpaceRoom() || room.getMyMembership() !== Membership.Join) return;
+        const notificationType = getNotificationType(mx, room.roomId);
+        if (notificationType === NotificationType.Mute) return;
+
+        room.getThreads().forEach((thread) => {
+          // Server-seeded entries win — only fill gaps from the fallback.
+          if (seeded.get(room.roomId)?.has(thread.id)) return;
+
+          const counts = getThreadUnreadCounts(room, thread.id, myUserId);
+          if (
+            !shouldKeepThreadUnread(
+              notificationType,
+              counts.total,
+              counts.highlight,
+              counts.hasUnread
+            )
+          ) {
+            return;
+          }
+
+          const roomThreads = seeded.get(room.roomId) ?? new Map<string, ThreadUnread>();
+          roomThreads.set(thread.id, {
+            total: counts.total,
+            highlight: counts.highlight,
+            order: getNextThreadOrder(),
+          });
+          seeded.set(room.roomId, roomThreads);
+        });
+      });
+    }
+
     setThreadUnreadAtom({
       type: 'RESET',
-      roomToThreadUnread: await getSavedThreadUnread(mx, getNextThreadOrder),
+      roomToThreadUnread: seeded,
     });
   }, [getNextThreadOrder, mx, setThreadUnreadAtom]);
 
