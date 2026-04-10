@@ -312,6 +312,7 @@ export function Members({ requestClose }: MembersProps) {
 
                   if ('userId' in tagOrMember) {
                     const server = getMxIdServer(tagOrMember.userId);
+                    const username = getMxIdLocalPart(tagOrMember.userId);
                     return (
                       <VirtualTile
                         virtualItem={vItem}
@@ -329,7 +330,14 @@ export function Members({ requestClose }: MembersProps) {
                             useAuthentication={useAuthentication}
                             after={
                               server && (
-                                <Box as="span" shrink="No" alignSelf="End">
+                                <Box as="span" shrink="No" alignSelf="End" direction="Column">
+                                  {username && (
+                                    <ServerBadge
+                                      server={username}
+                                      fill="None"
+                                      style={{ alignSelf: 'End' }}
+                                    />
+                                  )}
                                   <ServerBadge server={server} fill="None" />
                                 </Box>
                               )
