@@ -19,6 +19,7 @@ import {
   SearchTab,
 } from './sidebar';
 import { CreateTab } from './sidebar/CreateTab';
+import { DirectDMsList } from './sidebar/DirectDMsList';
 import { darkTheme } from '../../../colors.css';
 import { onDarkFontWeight } from '../../../config.css';
 import { useSetting } from '../../state/hooks/settings';
@@ -36,6 +37,7 @@ export function SidebarNav() {
             <SidebarStack>
               <HomeTab />
               <DirectTab />
+              <DirectDMsList />
             </SidebarStack>
             <SpaceTabs scrollRef={scrollRef} />
             <SidebarStackSeparator />

@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import FocusTrap from 'focus-trap-react';
@@ -20,6 +20,7 @@ import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useDirectRooms } from '../direct/useDirectRooms';
+import { useSidebarDirectRoomIds } from './useSidebarDirectRoomIds';
 import { markAsReadScope } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import { settingsAtom } from '../../../state/settings';
@@ -67,7 +68,14 @@ export function DirectTab() {
 
   const mDirects = useAtomValue(mDirectAtom);
   const directs = useDirects(mx, allRoomsAtom, mDirects);
-  const directUnread = useRoomsCombinedUnread(directs);
+  const sidebarRoomIds = useSidebarDirectRoomIds();
+  // Exclude DMs that are already shown as individual avatars in the sidebar to
+  // prevent double-badging — each pinned DM already renders its own unread pill.
+  const overflowDirects = useMemo(() => {
+    const sidebarSet = new Set(sidebarRoomIds);
+    return directs.filter((id) => !sidebarSet.has(id));
+  }, [directs, sidebarRoomIds]);
+  const directUnread = useRoomsCombinedUnread(overflowDirects);
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const directSelected = useDirectSelected();
