@@ -30,6 +30,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Pinned message indicator in message list.
 - Branding support via config.json.
 - Configurable registration token source URLs per homeserver via config.json.
+- DM rooms honor their own avatar, name, and topic when set, with presence badges and partner status as fallback.
 
 ## Changed
 

@@ -56,6 +56,8 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomAvatar, useRoomNickname, useRoomTopic } from '../../hooks/useRoomMeta';
+import { Presence, useUserPresence } from '../../hooks/useUserPresence';
+import { AvatarPresence, PresenceBadge } from '../../components/presence';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
@@ -455,6 +457,9 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const avatarMxc = useRoomAvatar(room, direct);
   const name = useRoomNickname(room, direct);
   const topic = useRoomTopic(room);
+  const dmUserId = direct ? room.getAvatarFallbackMember()?.userId : undefined;
+  const presence = useUserPresence(dmUserId ?? '');
+  const description = direct ? topic || presence?.status : topic;
   const avatarUrl = avatarMxc
     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
@@ -618,22 +623,31 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
         )}
         <Box grow="Yes" alignItems="Center" gap="300">
           {screenSize !== ScreenSize.Mobile && (
-            <Avatar size="300">
-              <RoomAvatar
-                roomId={room.roomId}
-                src={avatarUrl}
-                alt={name}
-                renderFallback={() => (
-                  <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
-                )}
-              />
-            </Avatar>
+            <AvatarPresence
+              badge={
+                presence &&
+                presence.presence !== Presence.Offline && (
+                  <PresenceBadge presence={presence.presence} size="300" />
+                )
+              }
+            >
+              <Avatar size="300">
+                <RoomAvatar
+                  roomId={room.roomId}
+                  src={avatarUrl}
+                  alt={name}
+                  renderFallback={() => (
+                    <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                  )}
+                />
+              </Avatar>
+            </AvatarPresence>
           )}
           <Box direction="Column">
-            <Text size={topic ? 'H5' : 'H3'} truncate>
+            <Text size={description ? 'H5' : 'H3'} truncate>
               {name}
             </Text>
-            {topic && (
+            {topic ? (
               <UseStateProvider initial={false}>
                 {(viewTopic, setViewTopic) => (
                   <>
@@ -669,6 +683,12 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                   </>
                 )}
               </UseStateProvider>
+            ) : (
+              description && (
+                <Text size="T200" priority="300" truncate>
+                  {description}
+                </Text>
+              )
             )}
           </Box>
         </Box>

@@ -52,7 +52,9 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
-import { useRoomNickname } from '../../hooks/useRoomMeta';
+import { useRoomNickname, useRoomTopic } from '../../hooks/useRoomMeta';
+import { Presence, useUserPresence } from '../../hooks/useUserPresence';
+import { AvatarPresence, PresenceBadge } from '../../components/presence';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { callChatAtom } from '../../state/callEmbed';
@@ -265,6 +267,10 @@ export function RoomNavItem({
   );
 
   const roomName = useRoomNickname(room, direct);
+  const dmUserId = direct ? room.getAvatarFallbackMember()?.userId : undefined;
+  const presence = useUserPresence(dmUserId ?? '');
+  const topic = useRoomTopic(room);
+  const roomDescription = direct ? topic || presence?.status : undefined;
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -329,38 +335,57 @@ export function RoomNavItem({
       <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Avatar size="200" radii="400">
-              {showAvatar ? (
-                <RoomAvatar
-                  roomId={room.roomId}
-                  src={
-                    direct
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                  }
-                  alt={roomName}
-                  renderFallback={() => (
-                    <Text as="span" size="H6">
-                      {nameInitials(roomName)}
-                    </Text>
-                  )}
-                />
-              ) : (
-                <RoomIcon
-                  style={{
-                    opacity: unread ? config.opacity.P500 : config.opacity.P300,
-                  }}
-                  filled={selected}
-                  size="100"
-                  joinRule={room.getJoinRule()}
-                  roomType={room.getType()}
-                />
-              )}
-            </Avatar>
-            <Box as="span" grow="Yes">
+            <AvatarPresence
+              badge={
+                presence &&
+                presence.presence !== Presence.Offline && (
+                  <PresenceBadge presence={presence.presence} size="200" />
+                )
+              }
+            >
+              <Avatar size="200" radii="400">
+                {showAvatar ? (
+                  <RoomAvatar
+                    roomId={room.roomId}
+                    src={
+                      direct
+                        ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
+                        : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+                    }
+                    alt={roomName}
+                    renderFallback={() => (
+                      <Text as="span" size="H6">
+                        {nameInitials(roomName)}
+                      </Text>
+                    )}
+                  />
+                ) : (
+                  <RoomIcon
+                    style={{
+                      opacity: unread ? config.opacity.P500 : config.opacity.P300,
+                    }}
+                    filled={selected}
+                    size="100"
+                    joinRule={room.getJoinRule()}
+                    roomType={room.getType()}
+                  />
+                )}
+              </Avatar>
+            </AvatarPresence>
+            <Box as="span" grow="Yes" direction="Column">
               <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
                 {roomName}
               </Text>
+              {roomDescription && (
+                <Text
+                  truncate
+                  size="T200"
+                  priority="300"
+                  style={{ opacity: config.opacity.P300, marginTop: '-2px' }}
+                >
+                  {roomDescription}
+                </Text>
+              )}
             </Box>
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>

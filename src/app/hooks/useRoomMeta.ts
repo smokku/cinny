@@ -8,14 +8,12 @@ import { nicknamesAtom } from '../state/nicknames';
 
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
-
-  if (dm) {
-    return room.getAvatarFallbackMember()?.getMxcAvatarUrl();
-  }
   const content = avatarEvent?.getContent();
   const avatarMxc = content && typeof content.url === 'string' ? content.url : undefined;
 
-  return avatarMxc;
+  if (avatarMxc) return avatarMxc;
+  if (dm) return room.getAvatarFallbackMember()?.getMxcAvatarUrl();
+  return undefined;
 };
 
 export const useRoomBanner = (room: Room): string | undefined => {
@@ -47,10 +45,13 @@ export const useRoomName = (room: Room): string => {
 
 export const useRoomNickname = (room: Room, direct?: boolean): string => {
   const sdkName = useRoomName(room);
+  const nameEvent = useStateEvent(room, StateEvent.RoomName);
   const nicknames = useAtomValue(nicknamesAtom);
 
   return useMemo(() => {
-    if (direct) {
+    const explicitName = nameEvent?.getContent().name;
+    const hasExplicitName = typeof explicitName === 'string' && explicitName.length > 0;
+    if (direct && !hasExplicitName) {
       const other = room.getAvatarFallbackMember();
       if (other) {
         const nick = nicknames?.[other.userId];
@@ -58,7 +59,7 @@ export const useRoomNickname = (room: Room, direct?: boolean): string => {
       }
     }
     return sdkName;
-  }, [direct, room, sdkName, nicknames]);
+  }, [direct, room, sdkName, nameEvent, nicknames]);
 };
 
 export const useRoomTopic = (room: Room): string | undefined => {
