@@ -18,9 +18,14 @@ const SW_MEDIA_MAX_ENTRIES = 2000;
 type MediaCacheMeta = Record<string, number>;
 
 /**
- * Store session per client (tab)
+ * Store session per client (tab) - legacy single-session path
  */
 const sessions = new Map<string, SessionInfo>();
+
+/**
+ * Multi-account sessions keyed by baseUrl for matching media requests
+ */
+const sessionsByBaseUrl = new Map<string, SessionInfo>();
 
 let persistedSession: SessionInfo | undefined;
 
@@ -263,10 +268,30 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   const client = event.source as Client | null;
   if (!client) return;
 
-  const { type, accessToken, baseUrl } = event.data || {};
+  const { type, accessToken, baseUrl, sessions: multiSessions } = event.data || {};
 
   if (type === 'setSession') {
     setSession(client.id, accessToken, baseUrl);
+    event.waitUntil(cleanupDeadClients());
+  } else if (type === 'setSessions') {
+    if (Array.isArray(multiSessions)) {
+      sessionsByBaseUrl.clear();
+      for (const s of multiSessions) {
+        if (typeof s.baseUrl === 'string' && typeof s.accessToken === 'string') {
+          sessionsByBaseUrl.set(s.baseUrl, { baseUrl: s.baseUrl, accessToken: s.accessToken });
+        }
+      }
+      // Also persist the first session as fallback
+      if (multiSessions.length > 0) {
+        const first = multiSessions[0];
+        if (typeof first.baseUrl === 'string' && typeof first.accessToken === 'string') {
+          const session = { baseUrl: first.baseUrl, accessToken: first.accessToken };
+          sessions.set(client.id, session);
+          persistedSession = session;
+          persistSession(session).catch(() => undefined);
+        }
+      }
+    }
     event.waitUntil(cleanupDeadClients());
   }
 });
@@ -316,6 +341,15 @@ async function getPersistedSession(): Promise<SessionInfo | undefined> {
   return session;
 }
 
+function findSessionForUrl(url: string): SessionInfo | undefined {
+  for (const session of sessionsByBaseUrl.values()) {
+    if (validMediaRequest(url, session.baseUrl)) {
+      return session;
+    }
+  }
+  return undefined;
+}
+
 async function fetchMediaWithSession(url: string, session: SessionInfo): Promise<Response> {
   return fetch(url, {
     ...fetchConfig(session.accessToken),
@@ -340,6 +374,24 @@ self.addEventListener('fetch', (event: FetchEvent) => {
         }
 
         const response = await fetchMediaWithSession(url, session);
+        await cacheMediaResponse(url, response);
+        return response;
+      })()
+    );
+    return;
+  }
+
+  // Try multi-account sessions by matching baseUrl
+  const multiSession = findSessionForUrl(url);
+  if (multiSession) {
+    event.respondWith(
+      (async () => {
+        const cachedResponse = await getCachedMediaResponse(url);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        const response = await fetchMediaWithSession(url, multiSession);
         await cacheMediaResponse(url, response);
         return response;
       })()

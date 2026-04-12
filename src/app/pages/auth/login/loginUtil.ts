@@ -2,6 +2,7 @@ import to from 'await-to-js';
 import { LoginRequest, LoginResponse, MatrixError, createClient } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSetAtom } from 'jotai';
 import { quietMatrixLogger } from '../../../../client/matrixLogger';
 import { ClientConfig, clientAllowedServer } from '../../../hooks/useClientConfig';
 import { autoDiscovery, specVersions } from '../../../cs-api';
@@ -11,7 +12,7 @@ import {
   getAfterLoginRedirectPath,
 } from '../../afterLoginRedirectPath';
 import { getHomePath } from '../../pathUtils';
-import { setFallbackSession } from '../../../state/sessions';
+import { Session, sessionsAtom } from '../../../state/sessions';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -111,14 +112,21 @@ export const login = async (
 
 export const useLoginComplete = (data?: CustomLoginResponse) => {
   const navigate = useNavigate();
+  const setSessions = useSetAtom(sessionsAtom);
 
   useEffect(() => {
     if (data) {
       const { response: loginRes, baseUrl: loginBaseUrl } = data;
-      setFallbackSession(loginRes.access_token, loginRes.device_id, loginRes.user_id, loginBaseUrl);
+      const session: Session = {
+        baseUrl: loginBaseUrl,
+        userId: loginRes.user_id,
+        deviceId: loginRes.device_id,
+        accessToken: loginRes.access_token,
+      };
+      setSessions({ type: 'PUT', session });
       const afterLoginRedirectUrl = getAfterLoginRedirectPath();
       deleteAfterLoginRedirectPath();
       navigate(afterLoginRedirectUrl ?? getHomePath(), { replace: true });
     }
-  }, [data, navigate]);
+  }, [data, navigate, setSessions]);
 };

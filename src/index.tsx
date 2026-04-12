@@ -16,7 +16,7 @@ import App from './app/pages/App';
 // import i18n (needs to be bundled ;))
 import './app/i18n';
 import { pushSessionToSW } from './sw-session';
-import { getFallbackSession } from './app/state/sessions';
+import { getStoredSessions } from './app/state/sessions';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -28,8 +28,8 @@ if ('serviceWorker' in navigator) {
       : `/dev-sw.js?dev-sw`;
 
   const sendSessionToSW = () => {
-    const session = getFallbackSession();
-    pushSessionToSW(session?.baseUrl, session?.accessToken);
+    const sessions = getStoredSessions();
+    pushSessionToSW(sessions.map((s) => ({ baseUrl: s.baseUrl, accessToken: s.accessToken })));
   };
 
   navigator.serviceWorker.register(swUrl).then(sendSessionToSW);

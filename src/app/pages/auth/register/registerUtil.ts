@@ -8,6 +8,7 @@ import {
 } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSetAtom } from 'jotai';
 import { LoginPathSearchParams } from '../../paths';
 import { ErrorCode } from '../../../cs-errorcode';
 import {
@@ -16,7 +17,7 @@ import {
 } from '../../afterLoginRedirectPath';
 import { getHomePath, getLoginPath, withSearchParam } from '../../pathUtils';
 import { getMxIdLocalPart, getMxIdServer } from '../../../utils/matrix';
-import { setFallbackSession } from '../../../state/sessions';
+import { Session, sessionsAtom } from '../../../state/sessions';
 
 export enum RegisterError {
   UserTaken = 'UserTaken',
@@ -109,6 +110,7 @@ export const register = async (
 
 export const useRegisterComplete = (data?: CustomRegisterResponse) => {
   const navigate = useNavigate();
+  const setSessions = useSetAtom(sessionsAtom);
 
   useEffect(() => {
     if (data) {
@@ -119,7 +121,13 @@ export const useRegisterComplete = (data?: CustomRegisterResponse) => {
       const deviceId = response.device_id;
 
       if (accessToken && deviceId) {
-        setFallbackSession(accessToken, deviceId, userId, baseUrl);
+        const session: Session = {
+          baseUrl,
+          userId,
+          deviceId,
+          accessToken,
+        };
+        setSessions({ type: 'PUT', session });
         const afterLoginRedirectPath = getAfterLoginRedirectPath();
         deleteAfterLoginRedirectPath();
         navigate(afterLoginRedirectPath ?? getHomePath(), { replace: true });
@@ -134,5 +142,5 @@ export const useRegisterComplete = (data?: CustomRegisterResponse) => {
         );
       }
     }
-  }, [data, navigate]);
+  }, [data, navigate, setSessions]);
 };
