@@ -1,19 +1,23 @@
 import { MatrixClient } from 'matrix-js-sdk';
-import { allInvitesAtom, useBindAllInvitesAtom } from '../room-list/inviteList';
-import { allRoomsAtom, useBindAllRoomsAtom } from '../room-list/roomList';
-import { mDirectAtom, useBindMDirectAtom } from '../mDirectList';
-import { bookmarksAtom, useBindBookmarksAtom } from '../bookmarks';
-import { roomToUnreadAtom, useBindRoomToUnreadAtom } from '../room/roomToUnread';
-import { roomToParentsAtom, useBindRoomToParentsAtom } from '../room/roomToParents';
-import { roomIdToTypingMembersAtom, useBindRoomIdToTypingMembersAtom } from '../typingMembers';
+import { useBindAllInvitesAtom } from '../room-list/inviteList';
+import { useBindAllRoomsAtom } from '../room-list/roomList';
+import { useBindMDirectAtom } from '../mDirectList';
+import { useBindBookmarksAtom } from '../bookmarks';
+import { useBindRoomToUnreadAtom } from '../room/roomToUnread';
+import { useBindRoomToParentsAtom } from '../room/roomToParents';
+import { useBindRoomIdToTypingMembersAtom } from '../typingMembers';
 
+/**
+ * Bind all per-account atoms for a single MatrixClient.
+ * Called once per account from AccountBootstrapper.
+ * Each hook internally resolves the account userId from mx.
+ */
 export const useBindAtoms = (mx: MatrixClient) => {
-  useBindMDirectAtom(mx, mDirectAtom);
-  useBindBookmarksAtom(mx, bookmarksAtom);
-  useBindAllInvitesAtom(mx, allInvitesAtom);
-  useBindAllRoomsAtom(mx, allRoomsAtom);
-  useBindRoomToParentsAtom(mx, roomToParentsAtom);
-  useBindRoomToUnreadAtom(mx, roomToUnreadAtom);
-
-  useBindRoomIdToTypingMembersAtom(mx, roomIdToTypingMembersAtom);
+  useBindMDirectAtom(mx);
+  useBindBookmarksAtom(mx);
+  useBindAllInvitesAtom(mx);
+  useBindAllRoomsAtom(mx);
+  useBindRoomToParentsAtom(mx);
+  useBindRoomToUnreadAtom(mx);
+  useBindRoomIdToTypingMembersAtom(mx);
 };

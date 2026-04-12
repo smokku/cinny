@@ -12,6 +12,7 @@ import {
 } from '../hooks/useDeviceVerificationStatus';
 import { sessionsAtom } from '../state/sessions';
 import { removeLiveClientAtom } from '../state/clientManager';
+import { cleanupAccountAtomsAtom } from '../state/accountCleanup';
 
 type LogoutDialogProps = {
   handleClose: () => void;
@@ -22,6 +23,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
     const sessions = useAtomValue(sessionsAtom);
     const setSessions = useSetAtom(sessionsAtom);
     const removeLiveClient = useSetAtom(removeLiveClientAtom);
+    const cleanupAccountAtoms = useSetAtom(cleanupAccountAtomsAtom);
     const session = sessions.find((s) => s.userId === mx.getSafeUserId());
     const hasEncryptedRoom = !!mx.getRooms().find((room) => room.hasEncryptionStateEvent());
     const crossSigningActive = useCrossSigningActive();
@@ -36,9 +38,10 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
         if (session) {
           setSessions({ type: 'DELETE', session });
           removeLiveClient(session.userId);
+          cleanupAccountAtoms(session.userId);
         }
         await logoutClient(mx, session);
-      }, [mx, session, setSessions, removeLiveClient])
+      }, [mx, session, setSessions, removeLiveClient, cleanupAccountAtoms])
     );
 
     const ongoingLogout = logoutState.status === AsyncStatus.Loading;

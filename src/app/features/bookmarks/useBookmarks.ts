@@ -13,6 +13,7 @@ import {
   bookmarkListAtom,
   bookmarkLoadingAtom,
   bookmarkRefreshErrorAtom,
+  bookmarksByAccountAtom,
 } from '../../state/bookmarks';
 
 export function useBookmarkList(): BookmarkItemContent[] {
@@ -34,7 +35,8 @@ export function useIsBookmarked(roomId: string, eventId: string): boolean {
 
 export function useBookmarkActions() {
   const mx = useMatrixClient();
-  const setList = useSetAtom(bookmarkListAtom);
+  const userId = mx.getSafeUserId();
+  const setByAccount = useSetAtom(bookmarksByAccountAtom);
   const setLoading = useSetAtom(bookmarkLoadingAtom);
   const setRefreshError = useSetAtom(bookmarkRefreshErrorAtom);
 
@@ -42,32 +44,48 @@ export function useBookmarkActions() {
     setLoading(true);
     try {
       const items = await listBookmarks(mx);
-      setList(items);
+      setByAccount((prev) => {
+        const next = new Map(prev);
+        next.set(userId, items);
+        return next;
+      });
       setRefreshError(undefined);
     } catch (error) {
       setRefreshError(error as Error);
     } finally {
       setLoading(false);
     }
-  }, [mx, setList, setLoading, setRefreshError]);
+  }, [mx, userId, setByAccount, setLoading, setRefreshError]);
 
   const add = useCallback(
     async (item: BookmarkItemContent) => {
-      setList((prev) => {
-        if (prev.some((b) => b.bookmark_id === item.bookmark_id)) return prev;
-        return [item, ...prev];
+      setByAccount((prev) => {
+        const next = new Map(prev);
+        const current = next.get(userId) ?? [];
+        if (current.some((b: BookmarkItemContent) => b.bookmark_id === item.bookmark_id))
+          return prev;
+        next.set(userId, [item, ...current]);
+        return next;
       });
       await repoAdd(mx, item);
     },
-    [mx, setList]
+    [mx, userId, setByAccount]
   );
 
   const remove = useCallback(
     async (bookmarkId: string) => {
-      setList((prev) => prev.filter((b) => b.bookmark_id !== bookmarkId));
+      setByAccount((prev) => {
+        const next = new Map(prev);
+        const current = next.get(userId) ?? [];
+        next.set(
+          userId,
+          current.filter((b: BookmarkItemContent) => b.bookmark_id !== bookmarkId)
+        );
+        return next;
+      });
       await repoRemove(mx, bookmarkId);
     },
-    [mx, setList]
+    [mx, userId, setByAccount]
   );
 
   const checkIsBookmarked = useCallback(

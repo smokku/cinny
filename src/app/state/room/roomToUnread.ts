@@ -1,6 +1,7 @@
 import produce from 'immer';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import {
+  ClientEvent,
   IRoomTimelineData,
   MatrixClient,
   MatrixEvent,
@@ -11,7 +12,7 @@ import {
   SyncState,
 } from 'matrix-js-sdk';
 import { Thread, ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Membership,
   NotificationType,
@@ -30,11 +31,12 @@ import {
   isNotificationEvent,
   roomHaveUnread,
 } from '../../utils/room';
-import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
+import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { getThreadUnreadCounts } from '../../utils/thread';
-import { roomToParentsAtom } from './roomToParents';
+import { roomToParentsByAccountAtom } from './roomToParents';
+import { roomOwnerByRoomIdAtom } from '../sessions';
 
 const STABLE_UNREAD_THREAD_NOTIFICATIONS = 'unread_thread_notifications';
 const UNSTABLE_UNREAD_THREAD_NOTIFICATIONS = 'org.matrix.msc3773.unread_thread_notifications';
@@ -431,128 +433,232 @@ const getSavedThreadUnread = async (
   return roomToThreadUnread;
 };
 
-const baseRoomToUnread = atom<RoomToUnread>(new Map());
-export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefined>(
-  (get) => get(baseRoomToUnread),
-  (get, set, action) => {
-    if (action.type === 'RESET') {
-      const draftRoomToUnread: RoomToUnread = new Map();
-      action.unreadInfos.forEach((unreadInfo) => {
-        putUnreadInfo(
-          draftRoomToUnread,
-          getAllParents(get(roomToParentsAtom), unreadInfo.roomId),
-          unreadInfo
-        );
-      });
-      set(baseRoomToUnread, draftRoomToUnread);
-      return;
-    }
-    if (action.type === 'PUT') {
-      const { unreadInfo } = action;
-      const currentUnread = get(baseRoomToUnread).get(unreadInfo.roomId);
-      if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
-        return;
-      }
-      set(
-        baseRoomToUnread,
-        produce(get(baseRoomToUnread), (draftRoomToUnread) =>
+// ---------------------------------------------------------------------------
+// Per-account storage
+// ---------------------------------------------------------------------------
+export const roomToUnreadByAccountAtom = atom<Map<string, RoomToUnread>>(new Map());
+export const roomToThreadUnreadByAccountAtom = atom<Map<string, RoomToThreadUnread>>(new Map());
+
+const accountUnreadCache = new Map<string, ReturnType<typeof createAccountUnreadAtom>>();
+const accountThreadUnreadCache = new Map<
+  string,
+  ReturnType<typeof createAccountThreadUnreadAtom>
+>();
+
+function createAccountUnreadAtom(userId: string) {
+  return atom<RoomToUnread, [RoomToUnreadAction], void>(
+    (get) => get(roomToUnreadByAccountAtom).get(userId) ?? new Map(),
+    (get, set, action) => {
+      const accountParents = get(roomToParentsByAccountAtom).get(userId) ?? new Map();
+
+      if (action.type === 'RESET') {
+        const draftRoomToUnread: RoomToUnread = new Map();
+        action.unreadInfos.forEach((unreadInfo) => {
           putUnreadInfo(
             draftRoomToUnread,
-            getAllParents(get(roomToParentsAtom), unreadInfo.roomId),
+            getAllParents(accountParents, unreadInfo.roomId),
             unreadInfo
-          )
-        )
-      );
-      return;
+          );
+        });
+        set(roomToUnreadByAccountAtom, (prev) => {
+          const next = new Map(prev);
+          next.set(userId, draftRoomToUnread);
+          return next;
+        });
+        return;
+      }
+      if (action.type === 'PUT') {
+        const { unreadInfo } = action;
+        const current = get(roomToUnreadByAccountAtom).get(userId) ?? new Map();
+        const currentUnread = current.get(unreadInfo.roomId);
+        if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
+          return;
+        }
+        set(roomToUnreadByAccountAtom, (prev) => {
+          const next = new Map(prev);
+          next.set(
+            userId,
+            produce(prev.get(userId) ?? new Map(), (draft) =>
+              putUnreadInfo(draft, getAllParents(accountParents, unreadInfo.roomId), unreadInfo)
+            )
+          );
+          return next;
+        });
+        return;
+      }
+      if (action.type === 'DELETE') {
+        const current = get(roomToUnreadByAccountAtom).get(userId);
+        if (!current?.has(action.roomId)) return;
+        set(roomToUnreadByAccountAtom, (prev) => {
+          const next = new Map(prev);
+          next.set(
+            userId,
+            produce(prev.get(userId) ?? new Map(), (draft) =>
+              deleteUnreadInfo(draft, getAllParents(accountParents, action.roomId), action.roomId)
+            )
+          );
+          return next;
+        });
+      }
     }
-    if (action.type === 'DELETE' && get(baseRoomToUnread).has(action.roomId)) {
-      set(
-        baseRoomToUnread,
-        produce(get(baseRoomToUnread), (draftRoomToUnread) =>
-          deleteUnreadInfo(
-            draftRoomToUnread,
-            getAllParents(get(roomToParentsAtom), action.roomId),
-            action.roomId
-          )
-        )
-      );
+  );
+}
+
+function createAccountThreadUnreadAtom(userId: string) {
+  return atom<RoomToThreadUnread, [RoomToThreadUnreadAction], void>(
+    (get) => get(roomToThreadUnreadByAccountAtom).get(userId) ?? new Map(),
+    (get, set, action) => {
+      const current = get(roomToThreadUnreadByAccountAtom).get(userId) ?? new Map();
+
+      if (action.type === 'RESET') {
+        set(roomToThreadUnreadByAccountAtom, (prev) => {
+          const next = new Map(prev);
+          next.set(userId, action.roomToThreadUnread);
+          return next;
+        });
+        return;
+      }
+
+      let updated: RoomToThreadUnread | undefined;
+
+      if (action.type === 'SET_ROOM') {
+        const currentThreads = current.get(action.roomId);
+        if (roomThreadUnreadEqual(currentThreads, action.threadToUnread)) return;
+        updated = produce(current, (draft) =>
+          setRoomThreadUnread(draft, action.roomId, action.threadToUnread)
+        );
+      }
+
+      if (action.type === 'PUT') {
+        const currentThread = current.get(action.roomId)?.get(action.threadId);
+        if (currentThread && threadUnreadEqual(currentThread, action.unread)) return;
+        updated = produce(current, (draft) =>
+          putThreadUnread(draft, action.roomId, action.threadId, action.unread)
+        );
+      }
+
+      if (action.type === 'DELETE') {
+        if (!current.get(action.roomId)?.has(action.threadId)) return;
+        updated = produce(current, (draft) =>
+          deleteThreadUnread(draft, action.roomId, action.threadId)
+        );
+      }
+
+      if (action.type === 'DELETE_ROOM') {
+        if (!current.has(action.roomId)) return;
+        updated = produce(current, (draft) => deleteRoomThreadUnread(draft, action.roomId));
+      }
+
+      if (updated) {
+        const finalUpdated = updated;
+        set(roomToThreadUnreadByAccountAtom, (prev) => {
+          const next = new Map(prev);
+          next.set(userId, finalUpdated);
+          return next;
+        });
+      }
     }
+  );
+}
+
+export function getAccountUnreadAtom(userId: string) {
+  let a = accountUnreadCache.get(userId);
+  if (!a) {
+    a = createAccountUnreadAtom(userId);
+    accountUnreadCache.set(userId, a);
   }
-);
+  return a;
+}
 
-const baseRoomToThreadUnread = atom<RoomToThreadUnread>(new Map());
-export const roomToThreadUnreadAtom = atom<
-  RoomToThreadUnread,
-  [RoomToThreadUnreadAction],
-  undefined
->(
-  (get) => get(baseRoomToThreadUnread),
-  (get, set, action) => {
-    if (action.type === 'RESET') {
-      set(baseRoomToThreadUnread, action.roomToThreadUnread);
-      return;
-    }
-
-    if (action.type === 'SET_ROOM') {
-      const currentThreads = get(baseRoomToThreadUnread).get(action.roomId);
-      if (roomThreadUnreadEqual(currentThreads, action.threadToUnread)) return;
-
-      set(
-        baseRoomToThreadUnread,
-        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
-          setRoomThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadToUnread)
-        )
-      );
-      return;
-    }
-
-    if (action.type === 'PUT') {
-      const currentThread = get(baseRoomToThreadUnread).get(action.roomId)?.get(action.threadId);
-      if (currentThread && threadUnreadEqual(currentThread, action.unread)) return;
-
-      set(
-        baseRoomToThreadUnread,
-        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
-          putThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadId, action.unread)
-        )
-      );
-      return;
-    }
-
-    if (action.type === 'DELETE') {
-      if (!get(baseRoomToThreadUnread).get(action.roomId)?.has(action.threadId)) return;
-
-      set(
-        baseRoomToThreadUnread,
-        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
-          deleteThreadUnread(draftRoomToThreadUnread, action.roomId, action.threadId)
-        )
-      );
-      return;
-    }
-
-    if (action.type === 'DELETE_ROOM') {
-      if (!get(baseRoomToThreadUnread).has(action.roomId)) return;
-
-      set(
-        baseRoomToThreadUnread,
-        produce(get(baseRoomToThreadUnread), (draftRoomToThreadUnread) =>
-          deleteRoomThreadUnread(draftRoomToThreadUnread, action.roomId)
-        )
-      );
-    }
+export function getAccountThreadUnreadAtom(userId: string) {
+  let a = accountThreadUnreadCache.get(userId);
+  if (!a) {
+    a = createAccountThreadUnreadAtom(userId);
+    accountThreadUnreadCache.set(userId, a);
   }
-);
+  return a;
+}
 
-export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roomToUnreadAtom) => {
-  const setUnreadAtom = useSetAtom(unreadAtom);
-  const setThreadUnreadAtom = useSetAtom(roomToThreadUnreadAtom);
-  const roomToThreadUnread = useAtomValue(roomToThreadUnreadAtom);
-  const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
+// ---------------------------------------------------------------------------
+// Aggregated read-only atoms (owner takes precedence for shared rooms)
+// ---------------------------------------------------------------------------
+export const roomToUnreadAtom = atom<RoomToUnread>((get) => {
+  const byAccount = get(roomToUnreadByAccountAtom);
+  const ownerMap = get(roomOwnerByRoomIdAtom);
+  const merged: RoomToUnread = new Map();
+
+  // First pass: fill with any account's data
+  byAccount.forEach((accountUnread) => {
+    accountUnread.forEach((unread, roomId) => {
+      if (!merged.has(roomId)) {
+        merged.set(roomId, unread);
+      }
+    });
+  });
+
+  // Second pass: owner overrides
+  byAccount.forEach((accountUnread, userId) => {
+    accountUnread.forEach((unread, roomId) => {
+      if (ownerMap[roomId] === userId) {
+        merged.set(roomId, unread);
+      }
+    });
+  });
+
+  return merged;
+});
+
+export const roomToThreadUnreadAtom = atom<RoomToThreadUnread>((get) => {
+  const byAccount = get(roomToThreadUnreadByAccountAtom);
+  const ownerMap = get(roomOwnerByRoomIdAtom);
+  const merged: RoomToThreadUnread = new Map();
+
+  byAccount.forEach((accountThreadUnread) => {
+    accountThreadUnread.forEach((threadMap, roomId) => {
+      if (!merged.has(roomId)) {
+        merged.set(roomId, new Map(threadMap));
+      }
+    });
+  });
+
+  byAccount.forEach((accountThreadUnread, userId) => {
+    accountThreadUnread.forEach((threadMap, roomId) => {
+      if (ownerMap[roomId] === userId) {
+        merged.set(roomId, new Map(threadMap));
+      }
+    });
+  });
+
+  return merged;
+});
+
+// ---------------------------------------------------------------------------
+// Cleanup
+// ---------------------------------------------------------------------------
+export const removeAccountUnreadAtom = atom(null, (_get, set, userId: string) => {
+  set(roomToUnreadByAccountAtom, (prev) => {
+    const next = new Map(prev);
+    next.delete(userId);
+    return next;
+  });
+  set(roomToThreadUnreadByAccountAtom, (prev) => {
+    const next = new Map(prev);
+    next.delete(userId);
+    return next;
+  });
+});
+
+export const useBindRoomToUnreadAtom = (mx: MatrixClient) => {
+  const userId = mx.getSafeUserId();
+  const accountUnreadAtom = useMemo(() => getAccountUnreadAtom(userId), [userId]);
+  const accountThreadUnreadAtom = useMemo(() => getAccountThreadUnreadAtom(userId), [userId]);
+
+  const setUnreadAtom = useSetAtom(accountUnreadAtom);
+  const setThreadUnreadAtom = useSetAtom(accountThreadUnreadAtom);
+  const roomToThreadUnread = useAtomValue(accountThreadUnreadAtom);
   const nextThreadOrderRef = useRef(1);
   const roomToThreadUnreadRef = useRef(roomToThreadUnread);
   const pendingThreadResetRef = useRef<Map<string, Set<string>>>(new Map());
-  const previousRoomsNotificationPreferencesRef = useRef(roomsNotificationPreferences);
 
   const getNextThreadOrder = useCallback((): number => {
     const nextOrder = nextThreadOrderRef.current;
@@ -952,13 +1058,20 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     };
   }, [getNextThreadOrder, mx, setThreadUnreadAtom, setUnreadAtom]);
 
+  // Rebuild unread state when push rules change (replaces React context dependency
+  // so this hook can run outside the RoomsNotificationPreferencesProvider tree).
   useEffect(() => {
-    if (previousRoomsNotificationPreferencesRef.current === roomsNotificationPreferences) return;
-
-    previousRoomsNotificationPreferencesRef.current = roomsNotificationPreferences;
-    resetRoomUnread();
-    rebuildTrackedThreadUnread();
-  }, [rebuildTrackedThreadUnread, resetRoomUnread, roomsNotificationPreferences]);
+    const handleAccountData = (event: MatrixEvent) => {
+      if (event.getType() === AccountDataEvent.PushRules) {
+        resetRoomUnread();
+        rebuildTrackedThreadUnread();
+      }
+    };
+    mx.on(ClientEvent.AccountData, handleAccountData);
+    return () => {
+      mx.removeListener(ClientEvent.AccountData, handleAccountData);
+    };
+  }, [mx, resetRoomUnread, rebuildTrackedThreadUnread]);
 
   useStateEventCallback(
     mx,

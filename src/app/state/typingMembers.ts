@@ -75,7 +75,7 @@ const timeoutReceipt = (
 export const roomIdToTypingMembersAtom = atom<
   IRoomIdToTypingMembers,
   [IRoomIdToTypingMembersAction],
-  undefined
+  void
 >(
   (get) => get(baseRoomIdToTypingMembersAtom),
   (get, set, action) => {
@@ -124,11 +124,8 @@ export const roomIdToTypingMembersAtom = atom<
   }
 );
 
-export const useBindRoomIdToTypingMembersAtom = (
-  mx: MatrixClient,
-  typingMembersAtom: typeof roomIdToTypingMembersAtom
-) => {
-  const setTypingMembers = useSetAtom(typingMembersAtom);
+export const useBindRoomIdToTypingMembersAtom = (mx: MatrixClient) => {
+  const setTypingMembers = useSetAtom(roomIdToTypingMembersAtom);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 
   useEffect(() => {

@@ -50,6 +50,8 @@ import {
 } from '../../state/clientManager';
 import { AutoDiscovery } from './AutoDiscovery';
 import { useBindRoomOwnerAtom } from '../../state/hooks/useBindRoomOwner';
+import { useBindAtoms } from '../../state/hooks/useBindAtoms';
+import { cleanupAccountAtomsAtom } from '../../state/accountCleanup';
 import { pushSessionToSW } from '../../../sw-session';
 
 function ClientRootLoading() {
@@ -141,6 +143,7 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
 const useLogoutListener = (mx: MatrixClient | undefined, session: Session | undefined) => {
   const setSessions = useSetAtom(sessionsAtom);
   const removeLiveClient = useSetAtom(removeLiveClientAtom);
+  const cleanupAccountAtoms = useSetAtom(cleanupAccountAtomsAtom);
 
   useEffect(() => {
     if (!mx || !session) return undefined;
@@ -148,6 +151,7 @@ const useLogoutListener = (mx: MatrixClient | undefined, session: Session | unde
       stopClient(mx);
       setSessions({ type: 'DELETE', session });
       removeLiveClient(session.userId);
+      cleanupAccountAtoms(session.userId);
       await logoutClient(mx, session);
     };
 
@@ -155,7 +159,7 @@ const useLogoutListener = (mx: MatrixClient | undefined, session: Session | unde
     return () => {
       mx.removeListener(HttpApiEvent.SessionLoggedOut, handleLogout);
     };
-  }, [mx, session, setSessions, removeLiveClient]);
+  }, [mx, session, setSessions, removeLiveClient, cleanupAccountAtoms]);
 };
 
 // ---------------------------------------------------------------------------
@@ -353,9 +357,15 @@ export function ClientRoot({ children }: ClientRootProps) {
 
 /**
  * Invisible component that owns the lifecycle for one account session.
+ * Binds all per-account atoms (rooms, invites, DMs, parents, unread, etc.).
  */
 function AccountBootstrapper({ session }: { session: Session }) {
   const { mx } = useAccountBootstrap(session);
   useBindRoomOwnerAtom(mx);
+  return mx ? <AccountAtomBinder mx={mx} /> : null;
+}
+
+function AccountAtomBinder({ mx }: { mx: MatrixClient }) {
+  useBindAtoms(mx);
   return null;
 }
