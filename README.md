@@ -10,6 +10,12 @@ If you want to contribute, just open a PR.
 Live version of this code is running at <https://matrix.chrome.pl/>
 and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 
+<p align="center">
+  <a href="shot_lobby.png"><img alt="Lobby view" src="shot_lobby.png" width="32%"></a>
+  <a href="shot_room.png"><img alt="Room view" src="shot_room.png" width="32%"></a>
+  <a href="shot_forum.png"><img alt="Forum view" src="shot_forum.png" width="32%"></a>
+</p>
+
 ## Added
 
 - Message Bookmarks with add, remove, and list functionality.
