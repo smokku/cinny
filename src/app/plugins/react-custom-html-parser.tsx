@@ -1,9 +1,11 @@
 /* eslint-disable jsx-a11y/alt-text */
 import React, {
   ComponentPropsWithoutRef,
+  CSSProperties,
   ReactEventHandler,
   Suspense,
   lazy,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -56,6 +58,43 @@ export const LINKIFY_OPTS: LinkifyOpts = {
   },
   ignoreTags: ['span'],
 };
+
+function KatexRenderer({
+  math,
+  displayMode,
+  style,
+}: {
+  math: string;
+  displayMode: boolean;
+  style?: CSSProperties;
+}) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([import('katex'), import('katex/dist/katex.min.css')]).then(([katex]) => {
+      if (mounted) {
+        setHtml(katex.default.renderToString(math, { throwOnError: false, displayMode }));
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [math, displayMode]);
+
+  if (html === null) {
+    return (
+      <code style={style}>
+        {displayMode ? '$$\n' : '$'}
+        {math}
+        {displayMode ? '\n$$' : '$'}
+      </code>
+    );
+  }
+
+  const Tag = displayMode ? 'div' : 'span';
+  return <Tag style={style} dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 export const makeMentionCustomProps = (
   handleMentionClick?: ReactEventHandler<HTMLElement>,
@@ -458,6 +497,20 @@ export const getReactCustomHtmlParser = (
           );
 
           if (mention) return mention;
+        }
+
+        if (name === 'span' && 'data-mx-maths' in props) {
+          const math = props['data-mx-maths'];
+          if (typeof math === 'string') {
+            return <KatexRenderer math={math} displayMode={false} />;
+          }
+        }
+
+        if (name === 'div' && 'data-mx-maths' in props) {
+          const math = props['data-mx-maths'];
+          if (typeof math === 'string') {
+            return <KatexRenderer math={math} displayMode />;
+          }
         }
 
         if (name === 'span' && 'data-mx-spoiler' in props) {

@@ -1,8 +1,14 @@
 import { findAndReplace } from '../../utils/findAndReplace';
-import { ESC_BLOCK_SEQ, UN_ESC_BLOCK_SEQ } from './block/rules';
-import { EscapeRule, CAP_INLINE_SEQ } from './inline/rules';
-import { runInlineRule } from './inline/runner';
-import { replaceMatch } from './internal';
+
+// Regex patterns for block-level markdown escape sequences
+// These match escaped markdown characters like \>, \#, \`, etc.
+const ESC_BLOCK_SEQ = /^\\(\\*[#>[ `])/;
+const UN_ESC_BLOCK_SEQ = /^\*[#>[ `]/;
+
+// URL-aware pattern for inline sequences
+const URL_NEG_LB = '(?<!(?:https?|ftp|mailto|magnet):\\/\\/\\S*)';
+const INLINE_SEQUENCE_SET = '[*_~`|]';
+const CAP_INLINE_SEQ = `${URL_NEG_LB}${INLINE_SEQUENCE_SET}`;
 
 /**
  * Removes escape sequences from markdown inline elements in the given plain-text.
@@ -12,11 +18,19 @@ import { replaceMatch } from './internal';
  * @param text - The input markdown plain-text containing escape characters (e.g., `"some \*italic\*"`)
  * @returns The plain-text with markdown escape sequences removed (e.g., `"some *italic*"`)
  */
-export const unescapeMarkdownInlineSequences = (text: string): string =>
-  runInlineRule(text, EscapeRule, (t) => {
-    if (t === '') return t;
-    return unescapeMarkdownInlineSequences(t);
-  }) ?? text;
+export const unescapeMarkdownInlineSequences = (text: string): string => {
+  const escapePattern = new RegExp(`${URL_NEG_LB}\\\\(${INLINE_SEQUENCE_SET})`, 'g');
+  const parts = findAndReplace(
+    text,
+    escapePattern,
+    (match) => {
+      const [, g1] = match;
+      return g1 ?? '';
+    },
+    (t) => t
+  );
+  return parts.join('');
+};
 
 /**
  * Recovers the markdown escape sequences in the given plain-text.
@@ -46,9 +60,9 @@ export const escapeMarkdownInlineSequences = (text: string): string => {
  * This function unescapes characters that are escaped with backslashes (e.g., `\>`, `\#`)
  * in markdown syntax, returning the original plain-text with markdown characters in effect.
  *
- * @param {string} text - The input markdown plain-text containing escape characters (e.g., `\> block quote`).
- * @param {function} processPart - It takes the plain-text as input and returns a modified version of it.
- * @returns {string} The plain-text with markdown escape sequences removed and markdown formatting applied.
+ * @param text - The input markdown plain-text containing escape characters (e.g., `\> block quote`).
+ * @param processPart - It takes the plain-text as input and returns a modified version of it.
+ * @returns The plain-text with markdown escape sequences removed and markdown formatting applied.
  */
 export const unescapeMarkdownBlockSequences = (
   text: string,
@@ -59,16 +73,16 @@ export const unescapeMarkdownBlockSequences = (
   if (!match) return processPart(text);
 
   const [, g1] = match;
-  return replaceMatch(text, match, g1, (t) => [processPart(t)]).join('');
+  return text.replace(ESC_BLOCK_SEQ, g1 ?? '');
 };
 
 /**
  * Escapes markdown block elements by adding backslashes before markdown characters
  * (e.g., `\>`, `\#`) that are normally interpreted as markdown syntax.
  *
- * @param {string} text - The input markdown plain-text that may contain markdown elements (e.g., `> block quote`).
- * @param {function} processPart - It takes the plain-text as input and returns a modified version of it.
- * @returns {string} The plain-text with markdown escape sequences added, preventing markdown formatting.
+ * @param text - The input markdown plain-text that may contain markdown elements (e.g., `> block quote`).
+ * @param processPart - It takes the plain-text as input and returns a modified version of it.
+ * @returns The plain-text with markdown escape sequences added, preventing markdown formatting.
  */
 export const escapeMarkdownBlockSequences = (
   text: string,
@@ -79,5 +93,5 @@ export const escapeMarkdownBlockSequences = (
   if (!match) return processPart(text);
 
   const [, g1] = match;
-  return replaceMatch(text, match, `\\${g1}`, (t) => [processPart(t)]).join('');
+  return text.replace(UN_ESC_BLOCK_SEQ, `\\${g1}`);
 };

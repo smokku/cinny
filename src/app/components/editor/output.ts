@@ -4,12 +4,10 @@ import { sanitizeText } from '../../utils/sanitize';
 import { BlockType } from './types';
 import { CustomElement } from './slate';
 import {
-  parseBlockMD,
-  parseInlineMD,
+  markdownToHtml,
   unescapeMarkdownBlockSequences,
   unescapeMarkdownInlineSequences,
 } from '../../plugins/markdown';
-import { findAndReplace } from '../../utils/findAndReplace';
 import { sanitizeForRegex } from '../../utils/regex';
 import { isUserId } from '../../utils/matrix';
 
@@ -18,6 +16,15 @@ export type OutputOptions = {
   allowInlineMarkdown?: boolean;
   allowBlockMarkdown?: boolean;
 };
+
+// Strip the outer <p>...</p>\n wrapper that marked adds to single-line markdown
+// so the result can be embedded inline with surrounding HTML/text.
+const stripParagraphWrapper = (html: string): string => {
+  const match = html.match(/^<p>([\s\S]*?)<\/p>\s*$/);
+  return match ? match[1] : html;
+};
+
+const parseInlineMarkdown = (text: string): string => stripParagraphWrapper(markdownToHtml(text));
 
 const textToCustomHtml = (node: Text, opts: OutputOptions): string => {
   let string = sanitizeText(node.text);
@@ -31,7 +38,7 @@ const textToCustomHtml = (node: Text, opts: OutputOptions): string => {
   }
 
   if (opts.allowInlineMarkdown && string === sanitizeText(node.text)) {
-    string = parseInlineMD(string);
+    string = parseInlineMarkdown(string);
   }
 
   return string;
@@ -86,15 +93,6 @@ const elementToCustomHtml = (node: CustomElement, children: string): string => {
   }
 };
 
-const HTML_TAG_REG_G = /<([\w-]+)(?: [^>]*)?(?:(?:\/>)|(?:>.*?<\/\1>))/g;
-const ignoreHTMLParseInlineMD = (text: string): string =>
-  findAndReplace(
-    text,
-    HTML_TAG_REG_G,
-    (match) => match[0],
-    (txt) => parseInlineMD(txt)
-  ).join('');
-
 export const toMatrixCustomHTML = (
   node: Descendant | Descendant[],
   opts: OutputOptions
@@ -112,12 +110,12 @@ export const toMatrixCustomHTML = (
 
       markdownLines += line;
       if (index === targetNodes.length - 1) {
-        return parseBlockMD(markdownLines, ignoreHTMLParseInlineMD);
+        return markdownToHtml(markdownLines);
       }
       return '';
     }
 
-    const parsedMarkdown = parseBlockMD(markdownLines, ignoreHTMLParseInlineMD);
+    const parsedMarkdown = markdownLines ? markdownToHtml(markdownLines) : '';
     markdownLines = '';
     const isCodeLine = 'type' in n && n.type === BlockType.CodeLine;
     if (isCodeLine) return `${parsedMarkdown}${toMatrixCustomHTML(n, {})}`;
