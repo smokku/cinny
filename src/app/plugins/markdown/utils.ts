@@ -7,7 +7,7 @@ const UN_ESC_BLOCK_SEQ = /^\*[#>[ `]/;
 
 // URL-aware pattern for inline sequences
 const URL_NEG_LB = '(?<!(?:https?|ftp|mailto|magnet):\\/\\/\\S*)';
-const INLINE_SEQUENCE_SET = '[*_~`|]';
+const INLINE_SEQUENCE_SET = '[*_~`|<>]';
 const CAP_INLINE_SEQ = `${URL_NEG_LB}${INLINE_SEQUENCE_SET}`;
 
 /**

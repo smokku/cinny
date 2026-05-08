@@ -38,6 +38,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Configurable registration token source URLs per homeserver via config.json.
 - DM rooms honor their own avatar, name, and topic when set, with presence badges and partner status as fallback.
 - Pin the 3 most recent unread DM rooms as individual avatars in the narrow sidebar.
+- KaTeX math rendering for inline (`$…$`) and block (`$$…$$`) math expressions.
 
 ## Changed
 
@@ -45,6 +46,8 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Discord-like message-reply layout and hover behavior.
   - Move the message context outside of message content.
 - Join rooms in Lobby by clicking the row.
+- Replaced the custom markdown parser with `marked` plus matrix-specific extensions (emoticons, spoilers, math, subscripts).
+- Replaced the WYSIWYG editor toolbar with one that inserts markdown syntax, leaving the source visible.
 
 ## Fixed
 
