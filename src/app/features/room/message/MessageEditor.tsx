@@ -29,8 +29,8 @@ import {
   AutocompleteQuery,
   CustomEditor,
   EmoticonAutocomplete,
+  MarkdownToolbar,
   RoomMentionAutocomplete,
-  Toolbar,
   UserMentionAutocomplete,
   createEmoticonElement,
   customHtmlEqualsPlainText,
@@ -343,7 +343,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
               {toolbar && (
                 <div>
                   <Line variant="SurfaceVariant" size="300" />
-                  <Toolbar />
+                  <MarkdownToolbar />
                 </div>
               )}
             </>

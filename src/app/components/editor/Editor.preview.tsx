@@ -13,7 +13,7 @@ import {
 } from 'folds';
 
 import { CustomEditor, useEditor } from './Editor';
-import { Toolbar } from './Toolbar';
+import { MarkdownToolbar } from './MarkdownToolbar';
 import { stopPropagation } from '../../utils/keyboard';
 
 export function EditorPreview() {
@@ -69,7 +69,7 @@ export function EditorPreview() {
                     toolbar && (
                       <div>
                         <Line variant="SurfaceVariant" size="300" />
-                        <Toolbar />
+                        <MarkdownToolbar />
                       </div>
                     )
                   }

@@ -20,7 +20,7 @@ import {
   AutocompleteQuery,
   CustomEditor,
   EmoticonAutocomplete,
-  Toolbar,
+  MarkdownToolbar,
   createEmoticonElement,
   getAutocompleteQuery,
   getPrevWorldRange,
@@ -273,7 +273,7 @@ export function BioEditor({ value, isSaving, imagePackRooms, disabled, onSave }:
               </Box>
               {toolbar && (
                 <Box direction="Column">
-                  <Toolbar />
+                  <MarkdownToolbar />
                 </Box>
               )}
             </Box>

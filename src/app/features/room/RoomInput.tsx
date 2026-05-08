@@ -32,7 +32,7 @@ import {
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import {
   CustomEditor,
-  Toolbar,
+  MarkdownToolbar,
   toMatrixCustomHTML,
   toPlainText,
   AUTOCOMPLETE_PREFIXES,
@@ -859,7 +859,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             toolbar && (
               <div>
                 <Line variant="SurfaceVariant" size="300" />
-                <Toolbar />
+                <MarkdownToolbar />
               </div>
             )
           }
