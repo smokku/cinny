@@ -38,6 +38,7 @@ and we have a public room at <https://matrix.to/#/#cinny:chrome.pl>.
 - Configurable registration token source URLs per homeserver via config.json.
 - DM rooms honor their own avatar, name, and topic when set, with presence badges and partner status as fallback.
 - Pin the 3 most recent unread DM rooms as individual avatars in the narrow sidebar.
+- Personal room name overrides ([MSC4431](https://github.com/matrix-org/matrix-spec-proposals/pull/4431)) via "Rename" in the room and sidebar menus, visible only to you.
 
 ## Changed
 
