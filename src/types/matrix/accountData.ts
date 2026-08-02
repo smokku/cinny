@@ -18,9 +18,14 @@ export enum AccountDataEvent {
   MegolmBackupV1 = 'm.megolm_backup.v1',
 
   SableNicknames = 'moe.sable.app.nicknames',
+
+  // MSC4431 — personal room name overrides (unstable identifier)
+  RoomNamePrivate = 'de.gematik.msc4431.room.name.private',
 }
 
 export type MDirectContent = Record<string, string[]>;
+
+export type RoomNamePrivateContent = { name?: string };
 
 export type SecretStorageDefaultKeyContent = {
   key: string;

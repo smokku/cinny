@@ -53,6 +53,7 @@ import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCr
 import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomNickname, useRoomTopic } from '../../hooks/useRoomMeta';
+import { PersonalRoomNameItem } from '../room/PersonalRoomNameItem';
 import { Presence, useUserPresence } from '../../hooks/useUserPresence';
 import { AvatarPresence, PresenceBadge } from '../../components/presence';
 import { useCallMembers, useCallSession } from '../../hooks/useCall';
@@ -186,6 +187,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               Room Settings
             </Text>
           </MenuItem>
+          <PersonalRoomNameItem room={room} requestClose={requestClose} />
         </Box>
         <Line variant="Surface" size="300" />
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
