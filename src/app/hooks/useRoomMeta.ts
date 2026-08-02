@@ -5,6 +5,7 @@ import { useAtomValue } from 'jotai';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
 import { nicknamesAtom } from '../state/nicknames';
+import { useRoomNamePrivate } from './useRoomNamePrivate';
 
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
@@ -47,8 +48,12 @@ export const useRoomNickname = (room: Room, direct?: boolean): string => {
   const sdkName = useRoomName(room);
   const nameEvent = useStateEvent(room, StateEvent.RoomName);
   const nicknames = useAtomValue(nicknamesAtom);
+  // MSC4431 — personal room name override takes priority over any computed name.
+  const privateName = useRoomNamePrivate(room);
 
   return useMemo(() => {
+    if (typeof privateName === 'string') return privateName;
+
     const explicitName = nameEvent?.getContent().name;
     const hasExplicitName = typeof explicitName === 'string' && explicitName.length > 0;
     if (direct && !hasExplicitName) {
@@ -59,7 +64,7 @@ export const useRoomNickname = (room: Room, direct?: boolean): string => {
       }
     }
     return sdkName;
-  }, [direct, room, sdkName, nameEvent, nicknames]);
+  }, [direct, room, sdkName, nameEvent, nicknames, privateName]);
 };
 
 export const useRoomTopic = (room: Room): string | undefined => {

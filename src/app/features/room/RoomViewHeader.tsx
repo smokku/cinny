@@ -56,6 +56,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomAvatar, useRoomNickname, useRoomTopic } from '../../hooks/useRoomMeta';
+import { PersonalRoomNameItem } from './PersonalRoomNameItem';
 import { Presence, useUserPresence } from '../../hooks/useUserPresence';
 import { AvatarPresence, PresenceBadge } from '../../components/presence';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -226,6 +227,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             Room Settings
           </Text>
         </MenuItem>
+        <PersonalRoomNameItem room={room} requestClose={requestClose} />
         <UseStateProvider initial={false}>
           {(promptJump, setPromptJump) => (
             <>
