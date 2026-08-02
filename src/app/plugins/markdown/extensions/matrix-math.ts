@@ -8,6 +8,12 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function isIgnorableMathContent(latex: string): boolean {
+  const t = latex.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (t === '') return true;
+  return /^\$+$/.test(t);
+}
+
 /**
  * Inline math delimiters use `$...$` but must not greedily pair across dollar amounts
  * (e.g. "$10 ... $20"). We only treat a pair as math when:
@@ -18,23 +24,31 @@ function escapeHtml(text: string): string {
 function tryTokenizeInlineMath(
   src: string
 ): { type: 'math'; raw: string; latex: string } | undefined {
-  if (!src.startsWith('$') || src.startsWith('$$')) {
+  if (!src.startsWith('$')) {
+    return undefined;
+  }
+  if (src.startsWith('$$') && (src.length < 3 || src.charAt(2) !== '$')) {
     return undefined;
   }
   if (src.length < 3 || /\s/.test(src.charAt(1))) {
     return undefined;
   }
   for (let j = 1; j < src.length; j += 1) {
-    if (src.charAt(j) !== '$') continue;
-    const before = src.charAt(j - 1);
-    if (/\s/.test(before)) continue;
     const after = j + 1 < src.length ? src.charAt(j + 1) : '';
-    if (after !== '' && /[0-9]/.test(after)) continue;
-    return {
-      type: 'math',
-      raw: src.slice(0, j + 1),
-      latex: src.slice(1, j),
-    };
+    const latex = src.slice(1, j);
+    const isClosingDollar =
+      src.charAt(j) === '$' &&
+      !/\s/.test(src.charAt(j - 1)) &&
+      !(after !== '' && /[0-9]/.test(after)) &&
+      !isIgnorableMathContent(latex) &&
+      !latex.trimStart().startsWith('$$');
+    if (isClosingDollar) {
+      return {
+        type: 'math',
+        raw: src.slice(0, j + 1),
+        latex,
+      };
+    }
   }
   return undefined;
 }
@@ -64,10 +78,12 @@ export const matrixMathBlockExtension = {
   tokenizer(src: string) {
     const match = /^\$\$([^$]+)\$\$\n?/.exec(src);
     if (match) {
+      const latex = match[1]?.trim() ?? '';
+      if (isIgnorableMathContent(latex)) return undefined;
       return {
         type: 'mathBlock',
         raw: match[0],
-        latex: match[1]?.trim() ?? '',
+        latex,
       };
     }
     return undefined;
