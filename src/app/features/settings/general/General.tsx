@@ -1077,6 +1077,28 @@ function Messages() {
   );
 }
 
+function Sync() {
+  const [slidingSync, setSlidingSync] = useSetting(settingsAtom, 'slidingSync');
+
+  const handleSetSlidingSync = (value: boolean) => {
+    setSlidingSync(value);
+    window.location.reload();
+  };
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Sync</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Use Sliding Sync"
+          description="Load rooms on demand with Simplified Sliding Sync (MSC4186). Requires server support. The app reloads to apply."
+          after={<Switch variant="Primary" value={slidingSync} onChange={handleSetSlidingSync} />}
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 type GeneralProps = {
   requestClose: () => void;
 };
@@ -1105,6 +1127,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <Sync />
             </Box>
           </PageContent>
         </Scroll>

@@ -55,6 +55,8 @@ export interface Settings {
   hour24Clock: boolean;
   dateFormatString: string;
 
+  slidingSync: boolean;
+
   developerTools: boolean;
 }
 
@@ -91,6 +93,8 @@ const defaultSettings: Settings = {
 
   hour24Clock: false,
   dateFormatString: 'D MMM YYYY',
+
+  slidingSync: false,
 
   developerTools: false,
 };
