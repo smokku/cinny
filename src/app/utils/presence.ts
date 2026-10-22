@@ -1,5 +1,6 @@
 import { MatrixClient, SetPresence } from 'matrix-js-sdk';
 import { Presence } from '../hooks/useUserPresence';
+import { getPresenceSyncManager } from '../../client/initMatrix';
 
 const PRESENCE_TO_SET_PRESENCE: Record<Presence, SetPresence> = {
   [Presence.Online]: SetPresence.Online,
@@ -15,7 +16,10 @@ export const setUserPresence = async (
   presence: Presence,
   statusMsg?: string
 ): Promise<void> => {
-  await mx.setSyncPresence(presence2SetPresence(presence));
+  const setPresence = presence2SetPresence(presence);
+  await mx.setSyncPresence(setPresence);
+  // Sliding sync carries no presence; its presence poll broadcasts it instead.
+  getPresenceSyncManager(mx)?.setDesiredPresence(setPresence);
   await mx.setPresence({
     presence,
     status_msg: statusMsg,

@@ -1,9 +1,11 @@
 import {
+  ClientEvent,
   createClient,
   MatrixClient,
   IndexedDBStore,
   IndexedDBCryptoStore,
   KnownMembership,
+  SyncState,
 } from 'matrix-js-sdk';
 import {
   MSC3575SlidingSyncRequest,
@@ -20,6 +22,7 @@ import {
   SlidingSyncManager,
 } from './slidingSync';
 import { SlidingSyncSidebarCache } from './slidingSyncSidebarCache';
+import { PresenceSyncManager } from './presenceSync';
 
 type Session = {
   baseUrl: string;
@@ -62,6 +65,37 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
 const slidingSyncByClient = new WeakMap<MatrixClient, SlidingSyncManager>();
 const slidingSyncRequestCleanupByClient = new WeakMap<MatrixClient, () => void>();
 const membershipActionCleanupByClient = new WeakMap<MatrixClient, () => void>();
+const presenceSyncByClient = new WeakMap<MatrixClient, PresenceSyncManager>();
+const presenceStartCleanupByClient = new WeakMap<MatrixClient, () => void>();
+
+const isInitialSyncReady = (state: SyncState | null): boolean =>
+  state === SyncState.Prepared || state === SyncState.Syncing || state === SyncState.Catchup;
+
+// Presence polling waits for the initial sync, so it does not compete with it.
+const startPresenceAfterInitialSync = (mx: MatrixClient, manager: PresenceSyncManager): void => {
+  const onSync = (state: SyncState) => {
+    if (!isInitialSyncReady(state)) return;
+    presenceStartCleanupByClient.get(mx)?.();
+    manager.start();
+  };
+
+  presenceStartCleanupByClient.set(mx, () => {
+    presenceStartCleanupByClient.delete(mx);
+    mx.removeListener(ClientEvent.Sync, onSync);
+  });
+  mx.on(ClientEvent.Sync, onSync);
+};
+
+const disposePresenceSync = (mx: MatrixClient): void => {
+  presenceStartCleanupByClient.get(mx)?.();
+  const manager = presenceSyncByClient.get(mx);
+  if (!manager) return;
+  manager.dispose();
+  presenceSyncByClient.delete(mx);
+};
+
+export const getPresenceSyncManager = (mx: MatrixClient): PresenceSyncManager | undefined =>
+  presenceSyncByClient.get(mx);
 
 type SlidingSyncMethod = (
   reqBody: MSC3575SlidingSyncRequest,
@@ -203,6 +237,7 @@ export type StartClientConfig = {
 
 export const startClient = async (mx: MatrixClient, config?: StartClientConfig) => {
   disposeSlidingSync(mx);
+  disposePresenceSync(mx);
 
   const useSliding = config?.slidingSync === true && (await supportsSlidingSync(mx));
   if (config?.slidingSync && !useSliding) {
@@ -211,6 +246,10 @@ export const startClient = async (mx: MatrixClient, config?: StartClientConfig) 
 
   let manager: SlidingSyncManager | undefined;
   if (useSliding) {
+    const presenceManager = new PresenceSyncManager(mx);
+    presenceSyncByClient.set(mx, presenceManager);
+    startPresenceAfterInitialSync(mx, presenceManager);
+
     manager = new SlidingSyncManager(mx, mx.baseUrl, {
       initialRoomIds: config?.initialRoomIds,
     });
@@ -232,12 +271,14 @@ export const startClient = async (mx: MatrixClient, config?: StartClientConfig) 
     }
   } catch (err) {
     disposeSlidingSync(mx);
+    disposePresenceSync(mx);
     throw err;
   }
 };
 
 export const stopClient = (mx: MatrixClient): void => {
   disposeSlidingSync(mx);
+  disposePresenceSync(mx);
   mx.stopClient();
 };
 
