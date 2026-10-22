@@ -214,10 +214,29 @@ export const roomHaveNotification = (room: Room): boolean => {
   return total > 0 || highlight > 0;
 };
 
+export const getFullyReadEventId = (room: Room): string | undefined =>
+  room.getAccountData(EventType.FullyRead)?.getContent<{ event_id?: string }>()?.event_id;
+
+// m.fully_read is a boundary too: the receipt can be gone after a restart.
+export const getReadBoundaryEventId = (room: Room, userId: string): string | undefined => {
+  const receiptId = room.getEventReadUpTo(userId) ?? undefined;
+  const fullyReadId = getFullyReadEventId(room);
+  if (!fullyReadId || receiptId === fullyReadId) return receiptId;
+
+  // Only trust the marker if it is actually loaded.
+  const liveEvents = room.getLiveTimeline().getEvents();
+  for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
+    const eventId = liveEvents[i]?.getId();
+    if (eventId === receiptId) return receiptId;
+    if (eventId === fullyReadId) return fullyReadId;
+  }
+  return receiptId;
+};
+
 export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
   const userId = mx.getUserId();
   if (!userId) return false;
-  const readUpToId = room.getEventReadUpTo(userId);
+  const readUpToId = getReadBoundaryEventId(room, userId);
   const liveEvents = room.getLiveTimeline().getEvents();
 
   for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
