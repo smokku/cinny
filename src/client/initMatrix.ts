@@ -119,10 +119,49 @@ const newSlidingSyncConnId = (): string =>
     `${Date.now()}-${Math.random().toString(16).slice(2)}`
   }`;
 
+type CryptoWithDeviceListInvalidation = { markAllTrackedUsersAsDirty: () => Promise<void> };
+
+// The SDK invalidates every tracked device list on each request without `pos`,
+// which includes requests resent before the first response arrived. Once per
+// run of pos-less requests is enough, as the server sends no delta until then.
+const coalesceDeviceListInvalidation = (mx: MatrixClient) => {
+  let invalidatedThisRun = false;
+  let patched: CryptoWithDeviceListInvalidation | undefined;
+  let restore: (() => void) | undefined;
+
+  const install = (invalidationAlreadyRan: boolean): void => {
+    const crypto = mx.getCrypto?.() as unknown as CryptoWithDeviceListInvalidation | undefined;
+    if (!crypto?.markAllTrackedUsersAsDirty || crypto === patched) return;
+
+    patched = crypto;
+    invalidatedThisRun = invalidationAlreadyRan;
+    const original = crypto.markAllTrackedUsersAsDirty.bind(crypto);
+    restore = () => {
+      crypto.markAllTrackedUsersAsDirty = original;
+    };
+    crypto.markAllTrackedUsersAsDirty = async () => {
+      if (invalidatedThisRun) return;
+      invalidatedThisRun = true;
+      await original();
+    };
+  };
+
+  install(false);
+
+  return {
+    onRequest: (pos: string | undefined) => install(pos === undefined),
+    onResponse: (pos: string | undefined) => {
+      if (pos !== undefined) invalidatedThisRun = false;
+    },
+    dispose: () => restore?.(),
+  };
+};
+
 const installSlidingSyncRequestPatch = (mx: MatrixClient, manager: SlidingSyncManager): void => {
   slidingSyncRequestCleanupByClient.get(mx)?.();
 
   const connId = newSlidingSyncConnId();
+  const deviceListInvalidation = coalesceDeviceListInvalidation(mx);
   const mxWritable = mx as MatrixClientWithWritableSlidingSync;
   const original = mx.slidingSync.bind(mx) as SlidingSyncMethod;
   mxWritable.slidingSync = async (reqBody, baseUrl, abortSignal) => {
@@ -134,8 +173,10 @@ const installSlidingSyncRequestPatch = (mx: MatrixClient, manager: SlidingSyncMa
     }
 
     scopeTypingExtension(req.extensions, manager.getActiveRoomSubscriptionIds());
+    deviceListInvalidation.onRequest(req.pos);
 
     const response = await original(reqBody, baseUrl, abortSignal);
+    deviceListInvalidation.onResponse(response.pos);
     // Must run before the SDK processes the response. A throw would reach the SDK's
     // loop, which drops the response and retries the same `pos` forever.
     try {
@@ -152,6 +193,7 @@ const installSlidingSyncRequestPatch = (mx: MatrixClient, manager: SlidingSyncMa
 
   slidingSyncRequestCleanupByClient.set(mx, () => {
     slidingSyncRequestCleanupByClient.delete(mx);
+    deviceListInvalidation.dispose();
     mxWritable.slidingSync = original;
   });
 };
