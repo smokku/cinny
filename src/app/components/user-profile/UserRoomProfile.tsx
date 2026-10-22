@@ -24,6 +24,7 @@ import { nicknamesAtom } from '../../state/nicknames';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { UserProfile, useUserProfile } from '../../hooks/useUserProfile';
+import { useRoomMemberHydration } from '../../hooks/useRoomMemberHydration';
 import {
   factoryRenderLinkifyWithMention,
   getReactCustomHtmlParser,
@@ -262,6 +263,7 @@ export function UserRoomProfile({
   const canUnban = permissions.action('ban', myUserId);
   const canInvite = permissions.action('invite', myUserId);
 
+  useRoomMemberHydration(room, userId);
   const member = room.getMember(userId);
   const membership = useMembership(room, userId);
 

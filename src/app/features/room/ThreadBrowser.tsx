@@ -65,6 +65,7 @@ import { nicknamesAtom } from '../../state/nicknames';
 import { UnreadBadge } from '../../components/unread-badge';
 import { countThreadUnread } from '../../utils/thread';
 import * as css from './ThreadDrawer.css';
+import { useRoomMemberHydration } from '../../hooks/useRoomMemberHydration';
 
 type ThreadPreviewProps = {
   room: Room;
@@ -116,6 +117,13 @@ function ThreadPreview({ room, thread, onClick, onJump }: ThreadPreviewProps) {
   );
 
   const { rootEvent } = thread;
+  const { allReplies, visibleReplies, redactedCount } = getThreadReplies(thread.events, thread.id);
+  const lastReply = visibleReplies.at(-1);
+  const lastSenderId = lastReply?.getSender() ?? '';
+  // Thread roots and replies can predate the sliding sync window, and so can their senders.
+  useRoomMemberHydration(room, rootEvent?.getSender() ?? '');
+  useRoomMemberHydration(room, lastSenderId);
+
   if (!rootEvent) return null;
 
   const senderId = rootEvent.getSender() ?? '';
@@ -124,10 +132,6 @@ function ThreadPreview({ room, thread, onClick, onJump }: ThreadPreviewProps) {
   const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
   const getContent = (() => rootEvent.getContent()) as GetContentCallback;
 
-  const { allReplies, visibleReplies, redactedCount } = getThreadReplies(
-    thread.events,
-    thread.id
-  );
   // Use Math.max so we never show fewer replies than the server reports.
   // allReplies reflects only the events already in the local window; the
   // server-side bundled aggregation (exposed via thread.length) is authoritative
@@ -135,8 +139,6 @@ function ThreadPreview({ room, thread, onClick, onJump }: ThreadPreviewProps) {
   const replyCount = Math.max(allReplies.length, thread.length ?? 0);
   const displayCount = Math.max(0, replyCount - redactedCount);
 
-  const lastReply = visibleReplies.at(-1);
-  const lastSenderId = lastReply?.getSender() ?? '';
   const lastDisplayName =
     getMemberDisplayName(room, lastSenderId, nicknames) ??
     getMxIdLocalPart(lastSenderId) ??
