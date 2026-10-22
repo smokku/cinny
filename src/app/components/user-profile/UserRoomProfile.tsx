@@ -1,5 +1,5 @@
-import React, { SyntheticEvent, useCallback, useMemo, useState } from 'react';
-import { Box, Button, color, config, Icon, Icons, Scroll, Text } from 'folds';
+import React, { useMemo, useState } from 'react';
+import { Box, Button, color, config, Icon, Icons, Position, RectCords, Scroll, Text } from 'folds';
 import { useNavigate } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
 import { Opts as LinkifyOpts } from 'linkifyjs';
@@ -32,6 +32,7 @@ import {
   renderMatrixMention,
 } from '../../plugins/react-custom-html-parser';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
+import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { RenderBody } from '../message';
 import { CreatorChip } from './CreatorChip';
 import { UserInviteAlert, UserBanAlert, UserModeration, UserKickAlert } from './UserModeration';
@@ -229,9 +230,16 @@ function UserExtendedSection({
 type UserRoomProfileProps = {
   userId: string;
   initialProfile?: Partial<UserProfile>;
+  anchor?: RectCords;
+  position?: Position;
 };
 
-export function UserRoomProfile({ userId, initialProfile }: UserRoomProfileProps) {
+export function UserRoomProfile({
+  userId,
+  initialProfile,
+  anchor,
+  position,
+}: UserRoomProfileProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const navigate = useNavigate();
@@ -282,9 +290,8 @@ export function UserRoomProfile({ userId, initialProfile }: UserRoomProfileProps
     navigate(withSearchParam(getDirectCreatePath(), directSearchParam));
   };
 
-  const mentionClickHandler = useCallback((e: SyntheticEvent<HTMLElement>) => {
-    e.preventDefault();
-  }, []);
+  // Reopen mentioned user profiles at this profile's anchor, as the clicked mention goes away.
+  const mentionClickHandler = useMentionClickHandler(room.roomId, anchor, position);
 
   const linkifyOpts = useMemo<LinkifyOpts>(
     () => ({
@@ -310,9 +317,10 @@ export function UserRoomProfile({ userId, initialProfile }: UserRoomProfileProps
         linkifyOpts,
         useAuthentication,
         handleSpoilerClick: spoilerClickHandler,
+        handleMentionClick: mentionClickHandler,
         nicknames,
       }),
-    [mx, room, linkifyOpts, useAuthentication, spoilerClickHandler, nicknames]
+    [mx, room, linkifyOpts, useAuthentication, spoilerClickHandler, mentionClickHandler, nicknames]
   );
 
   return (

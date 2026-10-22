@@ -37,7 +37,12 @@ function UserRoomProfileContextMenu({ state }: { state: UserRoomProfileState }) 
           <Menu style={{ width: toRem(340) }}>
             <SpaceProvider value={space ?? null}>
               <RoomProvider value={room}>
-                <UserRoomProfile userId={userId} initialProfile={initialProfile} />
+                <UserRoomProfile
+                  userId={userId}
+                  initialProfile={initialProfile}
+                  anchor={cords}
+                  position={position}
+                />
               </RoomProvider>
             </SpaceProvider>
           </Menu>
