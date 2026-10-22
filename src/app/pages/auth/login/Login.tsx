@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Text, color } from 'folds';
+import { Box, Icon, Icons, Switch, Text, Tooltip, TooltipProvider, color, config } from 'folds';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SSOAction } from 'matrix-js-sdk';
 import { useAuthFlows } from '../../../hooks/useAuthFlows';
@@ -13,6 +13,8 @@ import { getLoginPath, getRegisterPath, withSearchParam } from '../../pathUtils'
 import { usePathWithOrigin } from '../../../hooks/usePathWithOrigin';
 import { LoginPathSearchParams } from '../../paths';
 import { useClientConfig } from '../../../hooks/useClientConfig';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 
 const getLoginTokenSearchParam = () => {
   // when using hasRouter query params in existing route
@@ -33,6 +35,43 @@ const useLoginSearchParams = (searchParams: URLSearchParams): LoginPathSearchPar
     }),
     [searchParams]
   );
+
+// Large accounts may never finish a classic initial sync, so sliding sync can be
+// picked before logging in rather than only from the settings.
+function SlidingSyncLoginOption() {
+  const [slidingSync, setSlidingSync] = useSetting(settingsAtom, 'slidingSync');
+
+  return (
+    <Box alignItems="Center" justifyContent="SpaceBetween" gap="300">
+      <Box alignItems="Center" gap="100">
+        <Text as="label" htmlFor="login-sliding-sync" size="T300" priority="400">
+          Use sliding sync
+        </Text>
+        <TooltipProvider
+          delay={300}
+          tooltip={
+            <Tooltip style={{ maxWidth: '240px', padding: config.space.S200 }}>
+              <Text size="T200">
+                Sliding sync loads rooms on demand and needs server support. You can toggle it later
+                in Settings at any time.
+              </Text>
+            </Tooltip>
+          }
+        >
+          {(triggerRef) => (
+            <Icon ref={triggerRef} size="100" src={Icons.Info} aria-label="About sliding sync" />
+          )}
+        </TooltipProvider>
+      </Box>
+      <Switch
+        id="login-sliding-sync"
+        variant="Primary"
+        value={slidingSync}
+        onChange={setSlidingSync}
+      />
+    </Box>
+  );
+}
 
 export function Login() {
   const server = useAuthServer();
@@ -91,6 +130,7 @@ export function Login() {
           <span data-spacing-node />
         </>
       )}
+      <SlidingSyncLoginOption />
       <Text align="Center">
         Do not have an account? <Link to={getRegisterPath(server)}>Register</Link>
       </Text>
