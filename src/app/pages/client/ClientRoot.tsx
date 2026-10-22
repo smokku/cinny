@@ -63,11 +63,24 @@ const resolveLocalRoomId = (
 };
 
 function ClientRootLoading() {
+  const [slidingSync, setSlidingSync] = useSetting(settingsAtom, 'slidingSync');
+
+  // A large account can take very long to load with one sync method, so offer the other.
+  const handleSwap = () => {
+    setSlidingSync(!slidingSync);
+    window.location.reload();
+  };
+
   return (
     <SplashScreen>
       <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
         <Spinner variant="Secondary" size="600" />
         <Text>Heating up</Text>
+        <Button variant="Secondary" fill="None" size="300" radii="300" onClick={handleSwap}>
+          <Text as="span" size="B300">
+            {slidingSync ? 'Swap to classic sync' : 'Swap to sliding sync'}
+          </Text>
+        </Button>
       </Box>
     </SplashScreen>
   );
