@@ -250,7 +250,28 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
   return false;
 };
 
-export const getUnreadInfo = (room: Room): UnreadInfo => {
+type UnreadInfoOptions = {
+  /**
+   * Treat a room as read when our own event is the latest one, like the SDK does
+   * once after the initial sync. Sliding sync re-sends server counts that do not.
+   */
+  applyFixup?: boolean;
+};
+
+// fixupNotifications emits UnreadNotifications, whose handlers read unread info again.
+const unreadInfoFixupInProgress = new WeakSet<Room>();
+
+export const getUnreadInfo = (room: Room, options?: UnreadInfoOptions): UnreadInfo => {
+  const userId = room.client.getUserId();
+  if (userId && options?.applyFixup && !unreadInfoFixupInProgress.has(room)) {
+    unreadInfoFixupInProgress.add(room);
+    try {
+      room.fixupNotifications(userId);
+    } finally {
+      unreadInfoFixupInProgress.delete(room);
+    }
+  }
+
   const total = room.getRoomUnreadNotificationCount(NotificationCountType.Total);
   const highlight = room.getRoomUnreadNotificationCount(NotificationCountType.Highlight);
   return {
@@ -260,24 +281,58 @@ export const getUnreadInfo = (room: Room): UnreadInfo => {
   };
 };
 
-export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
+const getTrackedUnreadInfo = (
+  mx: MatrixClient,
+  room: Room,
+  options?: UnreadInfoOptions
+): UnreadInfo | undefined => {
+  if (room.getMyMembership() !== 'join') return undefined;
+  const notificationType = getNotificationType(mx, room.roomId);
+  if (notificationType === NotificationType.Mute) return undefined;
+
+  const unreadInfo = getUnreadInfo(room, options);
+  const hasUnread =
+    notificationType === NotificationType.MentionsAndKeywords
+      ? roomHaveNotification(room)
+      : roomHaveNotification(room) || roomHaveUnread(mx, room);
+  return hasUnread ? unreadInfo : undefined;
+};
+
+export const getUnreadInfos = (mx: MatrixClient, options?: UnreadInfoOptions): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
-    if (room.getMyMembership() !== 'join') return unread;
-    const notificationType = getNotificationType(mx, room.roomId);
-    if (notificationType === NotificationType.Mute) return unread;
-
-    const hasUnread =
-      notificationType === NotificationType.MentionsAndKeywords
-        ? roomHaveNotification(room)
-        : roomHaveNotification(room) || roomHaveUnread(mx, room);
-    if (hasUnread) {
-      unread.push(getUnreadInfo(room));
-    }
+    const unreadInfo = getTrackedUnreadInfo(mx, room, options);
+    if (unreadInfo) unread.push(unreadInfo);
 
     return unread;
   }, []);
   return unreadInfos;
+};
+
+/** Unread info of the given rooms, plus the rooms that no longer have any. */
+export const getUnreadInfosForRooms = (
+  mx: MatrixClient,
+  roomIds: Iterable<string>,
+  options?: UnreadInfoOptions
+): { unread: UnreadInfo[]; deleted: string[] } => {
+  const unread: UnreadInfo[] = [];
+  const deleted: string[] = [];
+
+  Array.from(roomIds).forEach((roomId) => {
+    const room = mx.getRoom(roomId);
+    if (!room) {
+      deleted.push(roomId);
+      return;
+    }
+    // Space unread is derived from children in the atom reducer.
+    if (room.isSpaceRoom()) return;
+
+    const unreadInfo = getTrackedUnreadInfo(mx, room, options);
+    if (unreadInfo) unread.push(unreadInfo);
+    else deleted.push(roomId);
+  });
+
+  return { unread, deleted };
 };
 
 export const getRoomIconSrc = (
