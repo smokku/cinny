@@ -25,6 +25,7 @@ import {
 } from './types';
 import { CallControl } from './CallControl';
 import { CallControlState } from './CallControlState';
+import { getSlidingSyncManager } from '../../../client/initMatrix';
 
 export class CallEmbed {
   private mx: MatrixClient;
@@ -172,6 +173,14 @@ export class CallEmbed {
 
     const controlState = initialControlState ?? new CallControlState(true, false, true);
     this.control = new CallControl(controlState, call, iframe);
+
+    // MatrixRTC ignores a call membership when the member's m.room.member
+    // event is absent from the local roster (sliding sync only ships $ME/$LAZY
+    // here). Subscribe the room with a full member wildcard so the SDK accepts
+    // the other participants' memberships for the embed's lifetime.
+    const callRoomSubscription = getSlidingSyncManager(mx)?.subscribeToCallRoom(room.roomId);
+    if (callRoomSubscription) this.disposables.push(callRoomSubscription);
+
     this.control.startObserving();
     iframe.onload = () => {
       this.control.startObserving();
