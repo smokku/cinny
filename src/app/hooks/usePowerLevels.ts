@@ -99,6 +99,15 @@ export const useRoomsPowerLevels = (rooms: Room[]): Map<string, IPowerLevels> =>
   }, [rooms]);
 
   const [roomToPowerLevels, setRoomToPowerLevels] = useState(() => getRoomsPowerLevels());
+  const [derivedFrom, setDerivedFrom] = useState(rooms);
+
+  // Rooms arriving after mount — a space hierarchy resolving, or rooms paged in
+  // by sliding sync — must re-derive, or their permissions are stuck at the
+  // defaults until a reload.
+  if (derivedFrom !== rooms) {
+    setDerivedFrom(rooms);
+    setRoomToPowerLevels(getRoomsPowerLevels());
+  }
 
   useStateEventCallback(
     mx,
