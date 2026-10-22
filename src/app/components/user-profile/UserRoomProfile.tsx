@@ -21,6 +21,8 @@ import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
 import { DirectCreateSearchParams } from '../../pages/paths';
 import { nicknamesAtom } from '../../state/nicknames';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 import { UserProfile, useUserProfile } from '../../hooks/useUserProfile';
 import {
   factoryRenderLinkifyWithMention,
@@ -65,6 +67,7 @@ function UserExtendedSection({
     return stringified.length > len ? `${stringified.slice(0, len)}...` : stringified;
   };
   const [showMore, setShowMore] = useState(false);
+  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
 
   const renderValue = (val: any) => {
     if (val === null || val === undefined) return 'n/a';
@@ -91,11 +94,12 @@ function UserExtendedSection({
         hour: 'numeric',
         minute: '2-digit',
         timeZone: profile.timezone.replace(/^["']|["']$/g, ''),
+        hour12: !hour24Clock,
       }).format(new Date());
     } catch {
       return null;
     }
-  }, [profile.timezone]);
+  }, [profile.timezone, hour24Clock]);
 
   const bioContent = useMemo(() => {
     let rawBio =
