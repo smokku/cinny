@@ -35,6 +35,7 @@ import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { getThreadUnreadCounts } from '../../utils/thread';
 import { roomToParentsAtom } from './roomToParents';
+import { getSlidingSyncManager } from '../../../client/initMatrix';
 
 const STABLE_UNREAD_THREAD_NOTIFICATIONS = 'unread_thread_notifications';
 const UNSTABLE_UNREAD_THREAD_NOTIFICATIONS = 'org.matrix.msc3773.unread_thread_notifications';
@@ -650,6 +651,19 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     resetRoomUnread();
     seedThreadUnread().catch(() => undefined);
   }, [resetRoomUnread, seedThreadUnread]);
+
+  useEffect(() => {
+    const manager = getSlidingSyncManager(mx);
+    if (!manager) return undefined;
+
+    let cancelled = false;
+    manager.waitForSidebarCacheHydration().then((hydrated) => {
+      if (!cancelled && hydrated) resetRoomUnread();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mx, resetRoomUnread]);
 
   useSyncState(
     mx,
