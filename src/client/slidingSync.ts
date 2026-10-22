@@ -430,6 +430,32 @@ export class SlidingSyncManager {
 
   private readonly serverMembershipRoomIds = new Set<string>();
 
+  private syncCount = 0;
+
+  /**
+   * One-shot RoomData listeners keyed by roomId, waiting for the first data of a
+   * room subscription. Cleaned up after the first fire or on unsubscribe/dispose.
+   */
+  private readonly pendingRoomDataListeners = new Map<
+    string,
+    (roomId: string, data: MSC3575RoomData) => void
+  >();
+
+  private readonly roomSubscriptionStatusListeners = new Map<
+    string,
+    Set<(loading: boolean) => void>
+  >();
+
+  private readonly roomDataAwaitingSyncCompletion = new Set<string>();
+
+  /**
+   * Sync cycle each room subscription was requested in. A quiet room can be
+   * subscribed to without the server ever sending a RoomData envelope for it,
+   * so the loading flag needs a deadline of its own rather than waiting on
+   * pendingRoomDataListeners, which would never fire.
+   */
+  private readonly roomSubscriptionLoadingSince = new Map<string, number>();
+
   private initialSyncCompleted = false;
 
   private readonly timelineResetCompletions = new WeakMap<
@@ -505,6 +531,23 @@ export class SlidingSyncManager {
       this.timelineResetCompletions.delete(resp);
       this.recordServerMembershipRooms(resp);
 
+      this.roomDataAwaitingSyncCompletion.forEach((roomId) =>
+        this.notifyRoomSubscriptionStatus(roomId, false)
+      );
+      this.roomDataAwaitingSyncCompletion.clear();
+
+      this.syncCount += 1;
+
+      // A subscription that saw no room data is settled once a full cycle has
+      // completed after the one it was requested in: the server had nothing to
+      // send for it. The extra cycle is the grace period for the request that
+      // actually carried the subscription.
+      this.roomSubscriptionLoadingSince.forEach((since, roomId) => {
+        if (this.syncCount < since + 2) return;
+        this.roomSubscriptionLoadingSince.delete(roomId);
+        this.notifyRoomSubscriptionStatus(roomId, false);
+      });
+
       this.requestedListRangeEnds.forEach((rangeEnd, key) => {
         this.confirmedListRangeEnds.set(key, rangeEnd);
       });
@@ -577,6 +620,17 @@ export class SlidingSyncManager {
 
   public dispose(): void {
     if (this.disposed) return;
+
+    this.pendingRoomDataListeners.forEach((listener) =>
+      this.slidingSync.removeListener(SlidingSyncEvent.RoomData, listener)
+    );
+    this.pendingRoomDataListeners.clear();
+    this.roomSubscriptionLoadingSince.clear();
+    this.roomDataAwaitingSyncCompletion.clear();
+    this.roomSubscriptionStatusListeners.forEach((listeners) =>
+      listeners.forEach((listener) => listener(false))
+    );
+    this.roomSubscriptionStatusListeners.clear();
 
     this.disposed = true;
     clearTimeout(this.pollWatchdogTimer);
@@ -862,15 +916,69 @@ export class SlidingSyncManager {
     });
   }
 
+  public onRoomSubscriptionStatus(
+    roomId: string,
+    listener: (loading: boolean) => void
+  ): () => void {
+    const listeners = this.roomSubscriptionStatusListeners.get(roomId) ?? new Set();
+    listeners.add(listener);
+    this.roomSubscriptionStatusListeners.set(roomId, listeners);
+    listener(this.isRoomSubscriptionLoading(roomId));
+
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) this.roomSubscriptionStatusListeners.delete(roomId);
+    };
+  }
+
+  public isRoomSubscriptionLoading(roomId: string): boolean {
+    return (
+      this.roomSubscriptionLoadingSince.has(roomId) ||
+      this.roomDataAwaitingSyncCompletion.has(roomId)
+    );
+  }
+
+  private notifyRoomSubscriptionStatus(roomId: string, loading: boolean): void {
+    this.roomSubscriptionStatusListeners.get(roomId)?.forEach((listener) => listener(loading));
+  }
+
   private addActiveRoomSubscription(roomId: string): boolean {
     if (this.activeRoomSubscriptions.has(roomId)) return false;
     this.activeRoomSubscriptions.add(roomId);
     this.pauseUnconfirmedListExpansion();
+
+    const existingListener = this.pendingRoomDataListeners.get(roomId);
+    if (existingListener) {
+      this.slidingSync.removeListener(SlidingSyncEvent.RoomData, existingListener);
+    }
+    // The room is loading until the cycle that delivered its first data completes.
+    const onFirstRoomData = (dataRoomId: string) => {
+      if (dataRoomId !== roomId) return;
+      if (this.hydratingSidebarCache) return;
+      this.slidingSync.removeListener(SlidingSyncEvent.RoomData, onFirstRoomData);
+      this.pendingRoomDataListeners.delete(roomId);
+      this.roomSubscriptionLoadingSince.delete(roomId);
+      this.roomDataAwaitingSyncCompletion.add(roomId);
+    };
+    this.pendingRoomDataListeners.set(roomId, onFirstRoomData);
+    this.roomSubscriptionLoadingSince.set(roomId, this.syncCount);
+    this.slidingSync.on(SlidingSyncEvent.RoomData, onFirstRoomData);
+    this.notifyRoomSubscriptionStatus(roomId, true);
     return true;
   }
 
   private removeActiveRoomSubscription(roomId: string): boolean {
-    return this.activeRoomSubscriptions.delete(roomId);
+    if (!this.activeRoomSubscriptions.has(roomId)) return false;
+    const pendingListener = this.pendingRoomDataListeners.get(roomId);
+    if (pendingListener) {
+      this.slidingSync.removeListener(SlidingSyncEvent.RoomData, pendingListener);
+      this.pendingRoomDataListeners.delete(roomId);
+    }
+    this.roomSubscriptionLoadingSince.delete(roomId);
+    this.roomDataAwaitingSyncCompletion.delete(roomId);
+    this.notifyRoomSubscriptionStatus(roomId, false);
+    this.activeRoomSubscriptions.delete(roomId);
+    return true;
   }
 
   public setActiveRoomSubscriptions(roomIds: Iterable<string>): void {

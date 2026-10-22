@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import { useMatrixClient } from './useMatrixClient';
 import { getSlidingSyncManager } from '../../client/initMatrix';
@@ -114,6 +114,24 @@ const useSlidingSyncImagePackSubscriptions = (): void => {
       [manager, mx]
     )
   );
+};
+
+/** Whether sliding sync is still loading the subscribed data of a room just opened. */
+export const useSlidingSyncRoomLoading = (roomId: string): boolean => {
+  const mx = useMatrixClient();
+  const manager = getSlidingSyncManager(mx);
+  const [loading, setLoading] = useState(() => manager?.isRoomSubscriptionLoading(roomId) ?? false);
+
+  useEffect(() => {
+    if (!manager) {
+      setLoading(false);
+      return undefined;
+    }
+
+    return manager.onRoomSubscriptionStatus(roomId, setLoading);
+  }, [manager, roomId]);
+
+  return loading;
 };
 
 export const useSlidingSyncActiveRoom = (): void => {
