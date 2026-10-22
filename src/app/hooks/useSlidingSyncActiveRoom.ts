@@ -3,6 +3,8 @@ import { matchPath, useLocation } from 'react-router-dom';
 import { useMatrixClient } from './useMatrixClient';
 import { getSlidingSyncManager } from '../../client/initMatrix';
 import { useResolvedRoomIdOrAlias } from './router/useResolvedRoomId';
+import { useSpaces } from '../state/hooks/roomList';
+import { allRoomsAtom } from '../state/room-list/roomList';
 import {
   DIRECT_ROOM_FORUM_PATH,
   DIRECT_ROOM_PATH,
@@ -78,6 +80,17 @@ const useSlidingSyncRouteRooms = (): void => {
   }, [manager]);
 };
 
+const useSlidingSyncSpaceSubscriptions = (): void => {
+  const mx = useMatrixClient();
+  const manager = getSlidingSyncManager(mx);
+  const spaces = useSpaces(mx, allRoomsAtom);
+
+  useEffect(() => {
+    manager?.setSpaceSubscriptions(spaces);
+  }, [manager, spaces]);
+};
+
 export const useSlidingSyncActiveRoom = (): void => {
   useSlidingSyncRouteRooms();
+  useSlidingSyncSpaceSubscriptions();
 };

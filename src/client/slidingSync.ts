@@ -40,6 +40,7 @@ const SDK_CLIENT_TIMEOUT_BUFFER_MS = 10_000;
 const POLL_DEADLINE_MARGIN_MS = 20_000;
 
 const ACTIVE_ROOM_SUBSCRIPTION_KEY = 'active_room';
+const SPACE_SUBSCRIPTION_KEY = 'space';
 const ACTIVE_ROOM_TIMELINE_LIMIT = 50;
 
 type SlidingSyncOptions = {
@@ -68,6 +69,19 @@ const buildListRequiredState = (): MSC3575RoomSubscription['required_state'] => 
   [UNSTABLE_ELEMENT_FUNCTIONAL_USERS.name, ''],
 ];
 
+const SPACE_REQUIRED_STATE: MSC3575RoomSubscription['required_state'] = [
+  [EventType.RoomCreate, ''],
+  [EventType.RoomName, ''],
+  [EventType.RoomAvatar, ''],
+  [EventType.RoomCanonicalAlias, ''],
+  [EventType.RoomJoinRules, ''],
+  [EventType.RoomEncryption, ''],
+  [EventType.RoomTombstone, ''],
+  [StateEvent.RoomBanner, ''],
+  [EventType.SpaceChild, MSC3575_WILDCARD],
+  [EventType.SpaceParent, MSC3575_WILDCARD],
+];
+
 const ACTIVE_ROOM_REQUIRED_STATE: MSC3575RoomSubscription['required_state'] = [
   // active room subscription includes all room data
   ...Object.values(StateEvent)
@@ -82,6 +96,11 @@ const ACTIVE_ROOM_REQUIRED_STATE: MSC3575RoomSubscription['required_state'] = [
 const buildActiveRoomSubscription = (timelineLimit: number): MSC3575RoomSubscription => ({
   timeline_limit: timelineLimit,
   required_state: ACTIVE_ROOM_REQUIRED_STATE,
+});
+
+const buildSpaceSubscription = (): MSC3575RoomSubscription => ({
+  timeline_limit: 0,
+  required_state: SPACE_REQUIRED_STATE,
 });
 
 const buildLists = (): Map<string, MSC3575List> => {
@@ -306,6 +325,12 @@ export class SlidingSyncManager {
 
   private readonly activeRoomSubscriptions = new Set<string>();
 
+  private readonly spaceSubscriptions = new Set<string>();
+
+  private deferredSpaceSubscriptions = new Set<string>();
+
+  private roomSubscriptionSyncQueued = false;
+
   private readonly roomTimelineLimit: number;
 
   private readonly onLifecycle: (
@@ -368,6 +393,7 @@ export class SlidingSyncManager {
       ACTIVE_ROOM_SUBSCRIPTION_KEY,
       buildActiveRoomSubscription(roomTimelineLimit)
     );
+    this.slidingSync.addCustomSubscription(SPACE_SUBSCRIPTION_KEY, buildSpaceSubscription());
 
     this.onLifecycle = (state, resp, err) => {
       if (err) {
@@ -483,6 +509,7 @@ export class SlidingSyncManager {
     if (allListsComplete && !this.listsFullyLoaded) {
       this.listsFullyLoaded = true;
       this.initialListHydrationCompleted = true;
+      setTimeout(() => this.flushDeferredSubscriptions(), 0);
     }
   }
 
@@ -502,9 +529,36 @@ export class SlidingSyncManager {
   }
 
   private handleRoomLeaveSubscriptions(roomId: string): void {
+    const removedPassiveSubscription = this.removePassiveSubscriptions(roomId);
     if (this.activeRoomSubscriptions.has(roomId)) {
       this.unsubscribeFromRoom(roomId);
+    } else if (removedPassiveSubscription) {
+      this.queueRoomSubscriptionSync();
     }
+  }
+
+  // Includes the deferred sets so a later flush cannot resubscribe a room we left.
+  private removePassiveSubscriptions(roomId: string): boolean {
+    const removedSpace = this.spaceSubscriptions.delete(roomId);
+    this.deferredSpaceSubscriptions.delete(roomId);
+    return removedSpace;
+  }
+
+  private flushDeferredSubscriptions(): void {
+    if (this.disposed || !this.listsFullyLoaded) return;
+
+    const spaces = this.deferredSpaceSubscriptions;
+    this.deferredSpaceSubscriptions = new Set();
+    this.setSpaceSubscriptions(spaces);
+  }
+
+  private queueRoomSubscriptionSync(): void {
+    if (this.disposed || this.roomSubscriptionSyncQueued) return;
+    this.roomSubscriptionSyncQueued = true;
+    queueMicrotask(() => {
+      this.roomSubscriptionSyncQueued = false;
+      if (!this.disposed) this.syncRoomSubscriptions();
+    });
   }
 
   private syncRoomSubscriptions(): void {
@@ -512,7 +566,7 @@ export class SlidingSyncManager {
     // M_INVALID_PARAM, so fill by priority and drop the rest.
     const desiredSubscriptions = new Set<string>();
     let dropped = 0;
-    [this.activeRoomSubscriptions].forEach((group) =>
+    [this.activeRoomSubscriptions, this.spaceSubscriptions].forEach((group) =>
       group.forEach((roomId) => {
         if (desiredSubscriptions.has(roomId)) return;
         if (desiredSubscriptions.size >= MAX_ROOM_SUBSCRIPTIONS) {
@@ -529,7 +583,11 @@ export class SlidingSyncManager {
     }
 
     desiredSubscriptions.forEach((roomId) => {
-      this.slidingSync.useCustomSubscription(roomId, ACTIVE_ROOM_SUBSCRIPTION_KEY);
+      if (this.activeRoomSubscriptions.has(roomId)) {
+        this.slidingSync.useCustomSubscription(roomId, ACTIVE_ROOM_SUBSCRIPTION_KEY);
+      } else {
+        this.slidingSync.useCustomSubscription(roomId, SPACE_SUBSCRIPTION_KEY);
+      }
     });
 
     this.slidingSync.modifyRoomSubscriptions(desiredSubscriptions);
@@ -588,6 +646,28 @@ export class SlidingSyncManager {
 
   public unsubscribeFromRoom(roomId: string): void {
     if (this.disposed || !this.removeActiveRoomSubscription(roomId)) return;
+    this.syncRoomSubscriptions();
+  }
+
+  /**
+   * Keeps every joined space subscribed with its child and parent state, which the
+   * room lists do not carry but the space sidebar and hierarchy need. Applied once
+   * the lists are loaded, so the initial room list is not held up by it.
+   */
+  public setSpaceSubscriptions(roomIds: Iterable<string>): void {
+    if (this.disposed) return;
+    const next = new Set(roomIds);
+    if (!this.listsFullyLoaded) {
+      this.deferredSpaceSubscriptions = next;
+      return;
+    }
+    const unchanged =
+      next.size === this.spaceSubscriptions.size &&
+      [...next].every((roomId) => this.spaceSubscriptions.has(roomId));
+    if (unchanged) return;
+
+    this.spaceSubscriptions.clear();
+    next.forEach((roomId) => this.spaceSubscriptions.add(roomId));
     this.syncRoomSubscriptions();
   }
 }
