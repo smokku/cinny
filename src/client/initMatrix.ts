@@ -19,6 +19,7 @@ import { pushSessionToSW } from '../sw-session';
 import {
   prepareSlidingSyncTimelines,
   scopeTypingExtension,
+  SlidingSyncDiagnostics,
   SlidingSyncManager,
 } from './slidingSync';
 import { SlidingSyncSidebarCache } from './slidingSyncSidebarCache';
@@ -270,6 +271,21 @@ const disposeSlidingSync = (mx: MatrixClient): void => {
 
 export const getSlidingSyncManager = (mx: MatrixClient): SlidingSyncManager | undefined =>
   slidingSyncByClient.get(mx);
+
+export type ClientSyncDiagnostics = {
+  transport: 'sliding' | 'classic';
+  syncState: SyncState | null;
+  sliding?: SlidingSyncDiagnostics;
+};
+
+export const getClientSyncDiagnostics = (mx: MatrixClient): ClientSyncDiagnostics => {
+  const manager = slidingSyncByClient.get(mx);
+  return {
+    transport: manager ? 'sliding' : 'classic',
+    syncState: mx.getSyncState(),
+    sliding: manager?.getDiagnostics(),
+  };
+};
 
 export type StartClientConfig = {
   slidingSync?: boolean;

@@ -62,6 +62,19 @@ type OptimisticJoin = {
 
 export type HydrationProgress = { loadedRooms: number; totalRooms: number };
 
+export type SlidingSyncListDiagnostics = {
+  key: string;
+  knownCount: number;
+  rangeEnd: number;
+  requestedRangeEnd: number;
+};
+
+export type SlidingSyncDiagnostics = {
+  baseUrl: string;
+  timelineLimit: number;
+  lists: SlidingSyncListDiagnostics[];
+};
+
 type RoomScopedExtensionResponse = {
   rooms?: Record<string, unknown>;
 };
@@ -623,7 +636,7 @@ export class SlidingSyncManager {
 
   public constructor(
     private readonly mx: MatrixClient,
-    baseUrl: string,
+    private readonly baseUrl: string,
     options: SlidingSyncOptions = {}
   ) {
     const pollTimeoutMs = clampPositive(options.pollTimeoutMs, DEFAULT_POLL_TIMEOUT_MS);
@@ -996,6 +1009,19 @@ export class SlidingSyncManager {
       const progress = this.getHydrationProgress();
       this.hydrationStatusListeners.forEach((listener) => listener(true, progress));
     }
+  }
+
+  public getDiagnostics(): SlidingSyncDiagnostics {
+    return {
+      baseUrl: this.baseUrl,
+      timelineLimit: this.roomTimelineLimit,
+      lists: this.listKeys.map((key) => ({
+        key,
+        knownCount: this.slidingSync.getListData(key)?.joinedCount ?? 0,
+        rangeEnd: this.confirmedListRangeEnds.get(key) ?? -1,
+        requestedRangeEnd: getListEndIndex(this.slidingSync.getListParams(key)),
+      })),
+    };
   }
 
   public getHydrationProgress(): HydrationProgress {
