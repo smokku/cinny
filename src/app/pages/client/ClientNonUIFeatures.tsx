@@ -33,6 +33,7 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { nicknamesAtom } from '../../state/nicknames';
 import { useSlidingSyncActiveRoom } from '../../hooks/useSlidingSyncActiveRoom';
+import { getSlidingSyncManager } from '../../../client/initMatrix';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -152,6 +153,9 @@ function MessageNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const notifRef = useRef<Notification>();
   const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
+  // Mount time, to tell new events from historical ones when sliding sync
+  // cannot say which events are live.
+  const clientStartTimeRef = useRef(Date.now());
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -208,9 +212,18 @@ function MessageNotifications() {
     ) => {
       if (mx.getSyncState() !== 'SYNCING') return;
       if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
+      // Sliding sync only marks events live when the server sends num_live, and
+      // some servers omit it. Treat an event as live there when it was sent at
+      // most a minute before the client started and has not been read yet.
+      const liveEvent =
+        data.liveEvent ||
+        (!!getSlidingSyncManager(mx) &&
+          !!room &&
+          mEvent.getTs() >= clientStartTimeRef.current - 60 * 1000 &&
+          !room.hasUserReadEvent(mx.getSafeUserId(), mEvent.getId() ?? ''));
       if (
         !room ||
-        !data.liveEvent ||
+        !liveEvent ||
         room.isSpaceRoom() ||
         !isNotificationEvent(mEvent) ||
         getNotificationType(mx, room.roomId) === NotificationType.Mute
