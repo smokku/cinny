@@ -45,6 +45,7 @@ const SDK_CLIENT_TIMEOUT_BUFFER_MS = 10_000;
 const POLL_DEADLINE_MARGIN_MS = 20_000;
 
 const ACTIVE_ROOM_SUBSCRIPTION_KEY = 'active_room';
+const CALL_ROOM_SUBSCRIPTION_KEY = 'call_room';
 const SIDEBAR_ROOM_SUBSCRIPTION_KEY = 'sidebar_room';
 const SPACE_SUBSCRIPTION_KEY = 'space';
 const IMAGE_PACK_SUBSCRIPTION_KEY = 'image_packs';
@@ -192,6 +193,13 @@ const buildSpaceImagePackSubscription = (): MSC3575RoomSubscription => ({
 const buildSidebarRoomSubscription = (): MSC3575RoomSubscription => ({
   timeline_limit: LIST_TIMELINE_LIMIT,
   required_state: buildListRequiredState(),
+});
+
+const buildCallRoomSubscription = (timelineLimit: number): MSC3575RoomSubscription => ({
+  timeline_limit: timelineLimit,
+  // MatrixRTC ignores memberships for users that are absent from the room
+  // roster. Unlike a timeline, calls need every membership continuously.
+  required_state: [...ACTIVE_ROOM_REQUIRED_STATE, [EventType.RoomMember, MSC3575_WILDCARD]],
 });
 
 const buildLists = (): Map<string, MSC3575List> => {
@@ -416,6 +424,8 @@ export class SlidingSyncManager {
 
   private readonly activeRoomSubscriptions = new Set<string>();
 
+  private readonly callRoomSubscriptions = new Set<string>();
+
   /**
    * Rooms joined locally via reconcileRoomMembership(Join) but not yet confirmed
    * joined by a sliding sync response. The SDK reverts these to "invite" when the
@@ -549,6 +559,10 @@ export class SlidingSyncManager {
     this.slidingSync.addCustomSubscription(
       ACTIVE_ROOM_SUBSCRIPTION_KEY,
       buildActiveRoomSubscription(roomTimelineLimit)
+    );
+    this.slidingSync.addCustomSubscription(
+      CALL_ROOM_SUBSCRIPTION_KEY,
+      buildCallRoomSubscription(roomTimelineLimit)
     );
     this.slidingSync.addCustomSubscription(
       SIDEBAR_ROOM_SUBSCRIPTION_KEY,
@@ -1119,6 +1133,7 @@ export class SlidingSyncManager {
     const desiredSubscriptions = new Set<string>();
     let dropped = 0;
     [
+      this.callRoomSubscriptions,
       this.activeRoomSubscriptions,
       this.sidebarRoomSubscriptions,
       this.spaceSubscriptions,
@@ -1140,7 +1155,9 @@ export class SlidingSyncManager {
     }
 
     desiredSubscriptions.forEach((roomId) => {
-      if (this.activeRoomSubscriptions.has(roomId)) {
+      if (this.callRoomSubscriptions.has(roomId)) {
+        this.slidingSync.useCustomSubscription(roomId, CALL_ROOM_SUBSCRIPTION_KEY);
+      } else if (this.activeRoomSubscriptions.has(roomId)) {
         this.slidingSync.useCustomSubscription(roomId, ACTIVE_ROOM_SUBSCRIPTION_KEY);
       } else if (this.spaceSubscriptions.has(roomId)) {
         this.slidingSync.useCustomSubscription(
@@ -1268,6 +1285,23 @@ export class SlidingSyncManager {
 
   public unsubscribeFromRoom(roomId: string): void {
     if (this.disposed || !this.removeActiveRoomSubscription(roomId)) return;
+    this.syncRoomSubscriptions();
+  }
+
+  /**
+   * Subscribes a room with every member for as long as a call runs in it.
+   * Returns the function that ends the subscription.
+   */
+  public subscribeToCallRoom(roomId: string): () => void {
+    if (this.disposed) return () => undefined;
+
+    this.callRoomSubscriptions.add(roomId);
+    this.syncRoomSubscriptions();
+    return () => this.unsubscribeFromCallRoom(roomId);
+  }
+
+  public unsubscribeFromCallRoom(roomId: string): void {
+    if (this.disposed || !this.callRoomSubscriptions.delete(roomId)) return;
     this.syncRoomSubscriptions();
   }
 
