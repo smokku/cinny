@@ -42,6 +42,7 @@ import {
   getSpaceLobbyPath,
 } from './pathUtils';
 import { ClientBindAtoms, ClientLayout, ClientRoot } from './client';
+import { RoomRoute } from './client/RoomRoute';
 import { Home, HomeRouteRoomProvider, HomeSearch } from './client/home';
 import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
@@ -49,9 +50,7 @@ import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
 import { Notifications, Inbox, Invites } from './client/inbox';
 import { BookmarksList } from './client/bookmarks';
 import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
-import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
-import { ForumView } from '../features/forum';
 import { WelcomePage } from './client/WelcomePage';
 import { SidebarNav } from './client/SidebarNav';
 import { PageRoot } from '../components/page';
@@ -181,7 +180,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_PATH}
             element={
               <HomeRouteRoomProvider>
-                <Room />
+                <RoomRoute section="home" forum={false} />
               </HomeRouteRoomProvider>
             }
           />
@@ -189,7 +188,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_FORUM_PATH}
             element={
               <HomeRouteRoomProvider>
-                <ForumView />
+                <RoomRoute section="home" forum />
               </HomeRouteRoomProvider>
             }
           />
@@ -214,7 +213,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_PATH}
             element={
               <DirectRouteRoomProvider>
-                <Room />
+                <RoomRoute section="direct" forum={false} />
               </DirectRouteRoomProvider>
             }
           />
@@ -222,7 +221,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_FORUM_PATH}
             element={
               <DirectRouteRoomProvider>
-                <ForumView />
+                <RoomRoute section="direct" forum />
               </DirectRouteRoomProvider>
             }
           />
@@ -262,7 +261,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_PATH}
             element={
               <SpaceRouteRoomProvider>
-                <Room />
+                <RoomRoute section="space" forum={false} />
               </SpaceRouteRoomProvider>
             }
           />
@@ -270,7 +269,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             path={_ROOM_FORUM_PATH}
             element={
               <SpaceRouteRoomProvider>
-                <ForumView />
+                <RoomRoute section="space" forum />
               </SpaceRouteRoomProvider>
             }
           />

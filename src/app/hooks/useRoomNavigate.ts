@@ -54,7 +54,7 @@ export const useRoomNavigate = () => {
         const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(mx, parentSpace);
 
         if (isForum && !openSpaceTimeline) {
-          navigate(getSpaceForumPath(pSpaceIdOrAlias, roomIdOrAlias), opts);
+          navigate(getSpaceForumPath(pSpaceIdOrAlias, roomIdOrAlias, eventId), opts);
         } else {
           navigate(
             getSpaceRoomPath(pSpaceIdOrAlias, openSpaceTimeline ? roomId : roomIdOrAlias, eventId),
@@ -66,7 +66,7 @@ export const useRoomNavigate = () => {
 
       if (mDirects.has(roomId)) {
         if (isForum) {
-          navigate(getDirectForumPath(roomIdOrAlias), opts);
+          navigate(getDirectForumPath(roomIdOrAlias, eventId), opts);
         } else {
           navigate(getDirectRoomPath(roomIdOrAlias, eventId), opts);
         }
@@ -74,7 +74,7 @@ export const useRoomNavigate = () => {
       }
 
       if (isForum) {
-        navigate(getHomeForumPath(roomIdOrAlias), opts);
+        navigate(getHomeForumPath(roomIdOrAlias, eventId), opts);
       } else {
         navigate(getHomeRoomPath(roomIdOrAlias, eventId), opts);
       }

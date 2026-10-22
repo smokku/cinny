@@ -39,11 +39,14 @@ export const _SEARCH_PATH = 'search/';
 export type _RoomSearchParams = {
   /* comma separated string of servers */
   viaServers?: string;
+  /* "true" keeps a forum room on the timeline route instead of the forum view */
+  timeline?: string;
 };
+export const ROOM_TIMELINE_SEARCH_PARAM = 'timeline';
 export const _ROOM_PATH = ':roomIdOrAlias/:eventId?/';
 
 export const _FORUM_PATH = 'forum/';
-export const _ROOM_FORUM_PATH = ':roomIdOrAlias/forum/';
+export const _ROOM_FORUM_PATH = ':roomIdOrAlias/forum/:eventId?/';
 
 export const _BOOKMARKS_PATH = 'bookmarks/';
 
