@@ -17,7 +17,8 @@ import {
 import to from 'await-to-js';
 import { IImageInfo, IThumbnailContent, IVideoInfo } from '../../types/matrix/common';
 import { AccountDataEvent } from '../../types/matrix/accountData';
-import { getEventReactions, getReactionContent, getStateEvent } from './room';
+import { getAccountData, getEventReactions, getReactionContent, getStateEvent } from './room';
+import { factoryRoomIdByActivity } from './sort';
 import { Membership, MessageEvent, StateEvent } from '../../types/matrix/room';
 
 const DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/;
@@ -180,7 +181,27 @@ export const factoryEventSentBy = (senderId: string) => (ev: MatrixEvent) =>
 export const eventWithShortcode = (ev: MatrixEvent) =>
   typeof ev.getContent().shortcode === 'string';
 
+const PRESENT_MEMBERSHIPS = new Set<string>([Membership.Join, Membership.Invite]);
+
+/**
+ * "m.direct" is the reliable signal, the member count heuristic below is only a
+ * fallback: it misses direct rooms which are unencrypted or hold members who left.
+ */
 export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined => {
+  const directRoomIds: unknown = getAccountData(mx, AccountDataEvent.Direct)?.getContent()[userId];
+  const tagged = (Array.isArray(directRoomIds) ? [...(directRoomIds as string[])] : [])
+    .sort(factoryRoomIdByActivity(mx))
+    .map((roomId) => mx.getRoom(roomId))
+    .filter((room): room is Room => room?.getMyMembership() === Membership.Join);
+
+  if (tagged.length > 0) {
+    // Prefer a room the other user is still part of over an abandoned one.
+    return (
+      tagged.find((room) => PRESENT_MEMBERSHIPS.has(room.getMember(userId)?.membership ?? '')) ??
+      tagged[0]
+    );
+  }
+
   const dmLikeRooms = mx
     .getRooms()
     .filter(
