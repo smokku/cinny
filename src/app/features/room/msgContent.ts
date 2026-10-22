@@ -19,6 +19,7 @@ import { encryptFile, getImageInfo, getThumbnailContent, getVideoInfo } from '..
 import { TUploadItem } from '../../state/room/roomInputDrafts';
 import { encodeBlurHash } from '../../utils/blurHash';
 import { scaleYDimension } from '../../utils/common';
+import { getGalleryBody, getGalleryFormattedBody } from '../../utils/gallery';
 
 const generateThumbnailContent = async (
   mx: MatrixClient,
@@ -203,18 +204,15 @@ export const buildGalleryContent = (
   caption?: string,
   formattedCaption?: string
 ): IContent => {
-  const body =
-    caption || items.map((item) => `[${item.itemtype}: ${item.body ?? 'file'}]`).join('\n');
-
   const content: IContent = {
     msgtype: GALLERY_MSGTYPE,
-    body,
+    body: getGalleryBody(items, caption),
     itemtypes: items,
   };
 
   if (formattedCaption) {
     content.format = 'org.matrix.custom.html';
-    content.formatted_body = formattedCaption;
+    content.formatted_body = getGalleryFormattedBody(items, formattedCaption);
   }
 
   return content;

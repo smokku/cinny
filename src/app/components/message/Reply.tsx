@@ -14,6 +14,8 @@ import { useRoomEvent } from '../../hooks/useRoomEvent';
 import colorMXID from '../../../util/colorMXID';
 import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { nicknamesAtom } from '../../state/nicknames';
+import { GALLERY_MSGTYPE, IGalleryContent } from '../../../types/matrix/common';
+import { getGalleryPreview } from '../../utils/gallery';
 
 type ReplyLayoutProps = {
   userColor?: string;
@@ -87,7 +89,11 @@ export const Reply = as<'div', ReplyProps>(
     );
     const replyEvent = useRoomEvent(room, replyEventId, getFromLocalTimeline);
 
-    const { body } = replyEvent?.getContent() ?? {};
+    const replyContent = replyEvent?.getContent();
+    const body =
+      replyContent?.msgtype === GALLERY_MSGTYPE
+        ? getGalleryPreview(replyContent as IGalleryContent)
+        : replyContent?.body;
     const sender = replyEvent?.getSender();
     const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
     const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;

@@ -33,6 +33,7 @@ import { TextViewer } from './text-viewer';
 import { testMatrixTo } from '../plugins/matrix-to';
 import { GALLERY_MSGTYPE, IGalleryContent, IImageContent } from '../../types/matrix/common';
 import { MGallery } from './message/MGallery';
+import { getGalleryCaptionContent } from '../utils/gallery';
 import { UrlPreviewSize } from '../state/settings';
 
 type RenderMessageContentProps = {
@@ -279,6 +280,7 @@ export function RenderMessageContent({
 
   if (msgType === GALLERY_MSGTYPE) {
     const galleryContent: IGalleryContent = getContent();
+    const captionContent = getGalleryCaptionContent(galleryContent);
     return (
       <MGallery
         content={galleryContent}
@@ -299,12 +301,12 @@ export function RenderMessageContent({
           />
         )}
         renderCaption={
-          galleryContent.body
+          captionContent
             ? () => (
                 <MText
                   style={{ marginTop: config.space.S200 }}
                   edited={edited}
-                  content={galleryContent}
+                  content={captionContent}
                   renderBody={(props) => (
                     <RenderBody
                       {...props}
