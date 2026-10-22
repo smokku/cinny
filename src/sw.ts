@@ -178,26 +178,27 @@ async function cleanupDeadClients() {
   });
 }
 
-function setSession(clientId: string, accessToken: unknown, baseUrl: unknown) {
+function setSession(clientId: string, accessToken: unknown, baseUrl: unknown): Promise<void> {
+  const persistence: Promise<void>[] = [];
   if (typeof accessToken === 'string' && typeof baseUrl === 'string') {
     const previousSession = persistedSession ?? sessions.get(clientId);
     const session = { accessToken, baseUrl };
     sessions.set(clientId, session);
     persistedSession = session;
-    persistSession(session).catch(() => undefined);
+    persistence.push(persistSession(session));
 
     if (
       previousSession &&
       (previousSession.accessToken !== accessToken || previousSession.baseUrl !== baseUrl)
     ) {
-      clearMediaCache().catch(() => undefined);
+      persistence.push(clearMediaCache().catch(() => undefined));
     }
   } else {
     // Logout or invalid session
     sessions.delete(clientId);
     persistedSession = undefined;
-    clearPersistedSession().catch(() => undefined);
-    clearMediaCache().catch(() => undefined);
+    persistence.push(clearPersistedSession());
+    persistence.push(clearMediaCache().catch(() => undefined));
   }
 
   const resolveSession = clientToResolve.get(clientId);
@@ -206,6 +207,8 @@ function setSession(clientId: string, accessToken: unknown, baseUrl: unknown) {
     clientToResolve.delete(clientId);
     clientToSessionPromise.delete(clientId);
   }
+
+  return Promise.all(persistence).then(() => undefined);
 }
 
 function requestSession(client: Client): Promise<SessionInfo | undefined> {
@@ -266,8 +269,10 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   const { type, accessToken, baseUrl } = event.data || {};
 
   if (type === 'setSession') {
-    setSession(client.id, accessToken, baseUrl);
-    event.waitUntil(cleanupDeadClients());
+    // Keep the worker alive until the session is persisted, so it can't be cut off mid-write.
+    event.waitUntil(
+      Promise.all([setSession(client.id, accessToken, baseUrl), cleanupDeadClients()])
+    );
   }
 });
 
