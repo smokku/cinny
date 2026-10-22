@@ -13,6 +13,7 @@ import {
 } from '../../../components/AccountDataEditor';
 import { copyToClipboard } from '../../../utils/dom';
 import { AccountData } from './AccountData';
+import { SyncDiagnostics } from './SyncDiagnostics';
 
 type DeveloperToolsProps = {
   requestClose: () => void;
@@ -108,6 +109,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                   </SequenceCard>
                 )}
               </Box>
+              {developerTools && <SyncDiagnostics />}
               {developerTools && (
                 <AccountData
                   expand={expand}
