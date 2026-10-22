@@ -146,6 +146,8 @@ const getReplyContent = (replyDraft: IReplyDraft): IContent['m.relates_to'] => {
   return relation;
 };
 
+const ENCRYPTION_PREPARATION_INTERVAL_MS = 60_000;
+
 interface RoomInputProps {
   editor: Editor;
   fileDropContainerRef: RefObject<HTMLElement>;
@@ -205,6 +207,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       selectedFiles.map((f) => f.file)
     );
     const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers>();
+    const lastEncryptionPreparationAt = useRef(0);
 
     const imagePackRooms: Room[] = useImagePackRooms(roomId, roomToParents);
 
@@ -564,13 +567,23 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           sendTypingStatus(!isEmptyEditor(editor));
         }
 
+        // Share room keys while the user is typing so sending doesn't wait for it.
+        const now = Date.now();
+        if (
+          room.hasEncryptionStateEvent() &&
+          now - lastEncryptionPreparationAt.current >= ENCRYPTION_PREPARATION_INTERVAL_MS
+        ) {
+          lastEncryptionPreparationAt.current = now;
+          mx.getCrypto()?.prepareToEncrypt(room);
+        }
+
         const prevWordRange = getPrevWordRange(editor);
         const query = prevWordRange
           ? getAutocompleteQuery<AutocompletePrefix>(editor, prevWordRange, AUTOCOMPLETE_PREFIXES)
           : undefined;
         setAutocompleteQuery(query);
       },
-      [editor, sendTypingStatus, hideActivity]
+      [editor, sendTypingStatus, hideActivity, mx, room]
     );
 
     const handleCloseAutocomplete = useCallback(() => {
