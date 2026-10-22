@@ -189,7 +189,6 @@ export const getNotificationType = (mx: MatrixClient, roomId: string): Notificat
 };
 
 const NOTIFICATION_EVENT_TYPES = [
-  'm.room.create',
   'm.room.message',
   'm.room.encrypted',
   'm.room.member',
@@ -221,14 +220,12 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
   const readUpToId = room.getEventReadUpTo(userId);
   const liveEvents = room.getLiveTimeline().getEvents();
 
-  if (liveEvents[liveEvents.length - 1]?.getSender() === userId) {
-    return false;
-  }
-
   for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
     const event = liveEvents[i];
     if (!event) return false;
     if (event.getId() === readUpToId) return false;
+    // Anything we sent (including our own join) means we've read what came before it.
+    if (event.getSender() === userId) return false;
     if (isNotificationEvent(event)) return true;
   }
   return false;
