@@ -51,6 +51,8 @@ const IMAGE_PACK_SUBSCRIPTION_KEY = 'image_packs';
 const SPACE_IMAGE_PACK_SUBSCRIPTION_KEY = 'space_image_packs';
 const ACTIVE_ROOM_TIMELINE_LIMIT = 50;
 
+export type HydrationProgress = { loadedRooms: number; totalRooms: number };
+
 type SlidingSyncOptions = {
   timelineLimit?: number;
   pollTimeoutMs?: number;
@@ -448,6 +450,10 @@ export class SlidingSyncManager {
 
   private readonly roomDataAwaitingSyncCompletion = new Set<string>();
 
+  private readonly hydrationStatusListeners = new Set<
+    (isHydrating: boolean, progress?: HydrationProgress) => void
+  >();
+
   /**
    * Sync cycle each room subscription was requested in. A quiet room can be
    * subscribed to without the server ever sending a RoomData envelope for it,
@@ -631,6 +637,8 @@ export class SlidingSyncManager {
       listeners.forEach((listener) => listener(false))
     );
     this.roomSubscriptionStatusListeners.clear();
+    this.hydrationStatusListeners.forEach((listener) => listener(false));
+    this.hydrationStatusListeners.clear();
 
     this.disposed = true;
     clearTimeout(this.pollWatchdogTimer);
@@ -765,6 +773,7 @@ export class SlidingSyncManager {
     if (this.initialListHydrationCompleted) return;
 
     let allListsComplete = true;
+    let expandedAny = false;
 
     this.listKeys.forEach((key) => {
       const knownCount = this.slidingSync.getListData(key)?.joinedCount ?? 0;
@@ -788,14 +797,54 @@ export class SlidingSyncManager {
 
       this.slidingSync.setListRanges(key, [[0, desiredEnd]]);
       this.requestedListRangeEnds.set(key, desiredEnd);
+      expandedAny = true;
     });
 
-    if (allListsComplete && !this.listsFullyLoaded) {
-      this.listsFullyLoaded = true;
-      this.initialListHydrationCompleted = true;
-      this.reconcileSidebarCacheMembership();
-      setTimeout(() => this.flushDeferredSubscriptions(), 0);
+    if (allListsComplete) {
+      if (!this.listsFullyLoaded) {
+        this.listsFullyLoaded = true;
+        this.initialListHydrationCompleted = true;
+        this.hydrationStatusListeners.forEach((listener) => listener(false));
+        this.reconcileSidebarCacheMembership();
+        setTimeout(() => this.flushDeferredSubscriptions(), 0);
+      }
+    } else if (expandedAny) {
+      const progress = this.getHydrationProgress();
+      this.hydrationStatusListeners.forEach((listener) => listener(true, progress));
     }
+  }
+
+  public getHydrationProgress(): HydrationProgress {
+    let loadedRooms = 0;
+    let totalRooms = 0;
+    this.listKeys.forEach((key) => {
+      const knownCount = this.slidingSync.getListData(key)?.joinedCount ?? 0;
+      const currentEnd = this.confirmedListRangeEnds.get(key) ?? -1;
+
+      if (knownCount > 0) {
+        totalRooms += knownCount;
+        loadedRooms += Math.min(knownCount, currentEnd + 1);
+      }
+    });
+    return { loadedRooms, totalRooms };
+  }
+
+  /** Whether the room lists are still being paged in after startup. */
+  public isSyncingRoomData(): boolean {
+    return !this.listsFullyLoaded;
+  }
+
+  public onHydrationStatusChange(
+    listener: (isHydrating: boolean, progress?: HydrationProgress) => void
+  ): () => void {
+    this.hydrationStatusListeners.add(listener);
+    listener(
+      this.isSyncingRoomData(),
+      this.isSyncingRoomData() ? this.getHydrationProgress() : undefined
+    );
+    return () => {
+      this.hydrationStatusListeners.delete(listener);
+    };
   }
 
   // Paging stops once every list is covered, but the counts keep growing, and a state
