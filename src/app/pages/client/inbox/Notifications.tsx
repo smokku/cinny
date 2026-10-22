@@ -413,7 +413,7 @@ function RoomNotificationsGroupComp({
     onOpen(room.roomId, eventId);
   };
   const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+    markAsRead(mx, room.roomId, hideActivity, true);
   };
 
   return (

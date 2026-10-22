@@ -1,4 +1,11 @@
-import { MatrixClient, ReceiptType, RelationType } from 'matrix-js-sdk';
+import {
+  MatrixClient,
+  NotificationCountType,
+  ReceiptType,
+  RelationType,
+  Room,
+} from 'matrix-js-sdk';
+import { getThreadUnreadCounts } from './thread';
 
 const sendLatestReadReceipt = async (
   mx: MatrixClient,
@@ -39,10 +46,52 @@ const sendLatestReadReceipt = async (
   );
 };
 
-export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
+// Thread replies never land in the live timeline, so the room receipt alone
+// can't clear them: send a receipt for the last reply of every unread thread.
+const markThreadsAsRead = async (mx: MatrixClient, room: Room, privateReceipt: boolean) => {
+  const userId = mx.getUserId();
+  if (!userId) return;
+  const receiptType = privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read;
+
+  await Promise.all(
+    room.getThreads().map(async (thread) => {
+      if (!getThreadUnreadCounts(room, thread.id, userId).hasUnread) return;
+
+      const lastReply = thread.lastReply((event) => !event.isSending());
+      if (!lastReply?.getId()) return;
+
+      if (thread.getEventReadUpTo(userId) !== lastReply.getId()) {
+        try {
+          await mx.sendReadReceipt(lastReply, receiptType);
+        } catch {
+          return;
+        }
+      }
+      room.setThreadUnreadNotificationCount(thread.id, NotificationCountType.Total, 0);
+      room.setThreadUnreadNotificationCount(thread.id, NotificationCountType.Highlight, 0);
+    })
+  );
+};
+
+/**
+ * @param includeThreads for explicit "mark as read" actions only: reading the
+ * main timeline must not clear threads the user has not opened.
+ */
+export async function markAsRead(
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  includeThreads = false
+) {
   await sendLatestReadReceipt(mx, roomId, privateReceipt, false, false);
+
+  const room = mx.getRoom(roomId);
+  if (includeThreads && room) await markThreadsAsRead(mx, room, privateReceipt);
 }
 
 export async function markAsReadScope(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
   await sendLatestReadReceipt(mx, roomId, privateReceipt, true, true);
+
+  const room = mx.getRoom(roomId);
+  if (room) await markThreadsAsRead(mx, room, privateReceipt);
 }
