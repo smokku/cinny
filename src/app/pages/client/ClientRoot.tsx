@@ -198,6 +198,8 @@ export function ClientRoot({ children }: ClientRootProps) {
         return startClient(m, {
           slidingSync,
           initialRoomIds: initialRoomId ? [initialRoomId] : undefined,
+          // Rooms cached from the last session can be shown before the first response.
+          onCachedRoomsLoaded: () => setLoading(false),
         });
       },
       [slidingSync]

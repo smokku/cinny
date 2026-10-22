@@ -13,6 +13,7 @@ import {
   scopeTypingExtension,
   SlidingSyncManager,
 } from './slidingSync';
+import { SlidingSyncSidebarCache } from './slidingSyncSidebarCache';
 
 type Session = {
   baseUrl: string;
@@ -152,6 +153,7 @@ export const getSlidingSyncManager = (mx: MatrixClient): SlidingSyncManager | un
 export type StartClientConfig = {
   slidingSync?: boolean;
   initialRoomIds?: Iterable<string>;
+  onCachedRoomsLoaded?: () => void;
 };
 
 export const startClient = async (mx: MatrixClient, config?: StartClientConfig) => {
@@ -169,6 +171,7 @@ export const startClient = async (mx: MatrixClient, config?: StartClientConfig) 
     });
     installSlidingSyncRequestPatch(mx, manager);
     manager.attach();
+    manager.prepareSidebarCacheHydration();
     slidingSyncByClient.set(mx, manager);
   }
 
@@ -178,6 +181,9 @@ export const startClient = async (mx: MatrixClient, config?: StartClientConfig) 
       slidingSync: manager?.slidingSync,
       threadSupport: true,
     });
+    if (manager && (await manager.waitForSidebarCacheHydration())) {
+      config?.onCachedRoomsLoaded?.();
+    }
   } catch (err) {
     disposeSlidingSync(mx);
     throw err;
@@ -192,6 +198,7 @@ export const stopClient = (mx: MatrixClient): void => {
 export const clearCacheAndReload = async (mx: MatrixClient) => {
   stopClient(mx);
   clearNavToActivePathStore(mx.getSafeUserId());
+  SlidingSyncSidebarCache.clear(mx.getSafeUserId());
   await mx.store.deleteAllData();
   window.location.reload();
 };

@@ -1,8 +1,12 @@
 import {
+  ClientEvent,
+  EventEmitterEvents,
   EventStatus,
   EventTimeline,
   EventTimelineSet,
   EventType,
+  IRoomEvent,
+  IStateEvent,
   KnownMembership,
   MatrixClient,
   MatrixEvent,
@@ -25,6 +29,7 @@ import {
 } from 'matrix-js-sdk/lib/sliding-sync';
 import { StateEvent } from '../types/matrix/room';
 import { markPreprocessingSlidingSyncTimelineReset } from './slidingSyncTimelineReset';
+import { SlidingSyncSidebarCache } from './slidingSyncSidebarCache';
 
 const LIST_JOINED = 'joined';
 const LIST_INVITES = 'invites';
@@ -40,6 +45,7 @@ const SDK_CLIENT_TIMEOUT_BUFFER_MS = 10_000;
 const POLL_DEADLINE_MARGIN_MS = 20_000;
 
 const ACTIVE_ROOM_SUBSCRIPTION_KEY = 'active_room';
+const SIDEBAR_ROOM_SUBSCRIPTION_KEY = 'sidebar_room';
 const SPACE_SUBSCRIPTION_KEY = 'space';
 const IMAGE_PACK_SUBSCRIPTION_KEY = 'image_packs';
 const SPACE_IMAGE_PACK_SUBSCRIPTION_KEY = 'space_image_packs';
@@ -54,6 +60,31 @@ type SlidingSyncOptions = {
 const clampPositive = (value: number | undefined, fallback: number): number => {
   if (typeof value !== 'number' || Number.isNaN(value) || value <= 0) return fallback;
   return Math.round(value);
+};
+
+type SlidingSyncEventLike = IStateEvent | IRoomEvent;
+
+const isSelfMemberEvent = (event: SlidingSyncEventLike, userId: string): boolean =>
+  event.type === EventType.RoomMember && 'state_key' in event && event.state_key === userId;
+
+// Scans backwards so the newest wins in a timeline that still holds the
+// previous membership.
+const findSelfMemberEvent = <T extends SlidingSyncEventLike>(
+  events: readonly T[],
+  userId: string
+): T | undefined => {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event && isSelfMemberEvent(event, userId)) return event;
+  }
+  return undefined;
+};
+
+const membershipOf = (event: SlidingSyncEventLike | undefined): string | undefined => {
+  const content = event?.content;
+  return content && typeof content === 'object'
+    ? ((content as { membership?: unknown }).membership as string | undefined)
+    : undefined;
 };
 
 const buildListRequiredState = (): MSC3575RoomSubscription['required_state'] => [
@@ -119,6 +150,11 @@ const buildImagePackSubscription = (): MSC3575RoomSubscription => ({
 const buildSpaceImagePackSubscription = (): MSC3575RoomSubscription => ({
   timeline_limit: 0,
   required_state: [...SPACE_REQUIRED_STATE, ...IMAGE_PACK_REQUIRED_STATE],
+});
+
+const buildSidebarRoomSubscription = (): MSC3575RoomSubscription => ({
+  timeline_limit: LIST_TIMELINE_LIMIT,
+  required_state: buildListRequiredState(),
 });
 
 const buildLists = (): Map<string, MSC3575List> => {
@@ -343,6 +379,8 @@ export class SlidingSyncManager {
 
   private readonly activeRoomSubscriptions = new Set<string>();
 
+  private readonly sidebarRoomSubscriptions = new Set<string>();
+
   private readonly spaceSubscriptions = new Set<string>();
 
   private deferredSpaceSubscriptions = new Set<string>();
@@ -354,6 +392,22 @@ export class SlidingSyncManager {
   private roomSubscriptionSyncQueued = false;
 
   private readonly roomTimelineLimit: number;
+
+  private readonly sidebarCache: SlidingSyncSidebarCache;
+
+  private cacheHydrationPromise: Promise<boolean> = Promise.resolve(false);
+
+  private cacheHydrationNewListener:
+    | ((eventName: string | symbol, listener: (...args: unknown[]) => void) => void)
+    | undefined;
+
+  private cacheHydrationResolve: ((hydrated: boolean) => void) | undefined;
+
+  private hydratingSidebarCache = false;
+
+  private readonly onCacheRoomData: (roomId: string, data: MSC3575RoomData) => void;
+
+  private readonly onCacheAccountData: (event: MatrixEvent) => void;
 
   private readonly onLifecycle: (
     state: SlidingSyncState,
@@ -369,6 +423,12 @@ export class SlidingSyncManager {
   private listsFullyLoaded = false;
 
   private initialListHydrationCompleted = false;
+
+  private sidebarCacheReconciled = false;
+
+  private sidebarCacheReconciliationQueued = false;
+
+  private readonly serverMembershipRoomIds = new Set<string>();
 
   private initialSyncCompleted = false;
 
@@ -397,6 +457,7 @@ export class SlidingSyncManager {
 
     const roomTimelineLimit = clampPositive(options.timelineLimit, ACTIVE_ROOM_TIMELINE_LIMIT);
     this.roomTimelineLimit = roomTimelineLimit;
+    this.sidebarCache = new SlidingSyncSidebarCache(mx.getSafeUserId());
 
     const lists = buildLists();
     this.listKeys = Array.from(lists.keys());
@@ -414,6 +475,10 @@ export class SlidingSyncManager {
     this.slidingSync.addCustomSubscription(
       ACTIVE_ROOM_SUBSCRIPTION_KEY,
       buildActiveRoomSubscription(roomTimelineLimit)
+    );
+    this.slidingSync.addCustomSubscription(
+      SIDEBAR_ROOM_SUBSCRIPTION_KEY,
+      buildSidebarRoomSubscription()
     );
     this.slidingSync.addCustomSubscription(
       IMAGE_PACK_SUBSCRIPTION_KEY,
@@ -438,6 +503,7 @@ export class SlidingSyncManager {
 
       this.timelineResetCompletions.get(resp)?.();
       this.timelineResetCompletions.delete(resp);
+      this.recordServerMembershipRooms(resp);
 
       this.requestedListRangeEnds.forEach((rangeEnd, key) => {
         this.confirmedListRangeEnds.set(key, rangeEnd);
@@ -456,12 +522,38 @@ export class SlidingSyncManager {
       this.handleRoomLeaveSubscriptions(member.roomId);
     };
 
+    this.onCacheRoomData = (roomId, data) => {
+      this.sidebarCache.cacheRoom(roomId, data);
+
+      if (!this.initialListHydrationCompleted || this.hydratingSidebarCache) return;
+
+      // A room that shows up in the lists after they were loaded (a new join, an
+      // invite) gets one round of list state through a room subscription.
+      let subscriptionsChanged = false;
+      const completedSidebarHydration = this.sidebarRoomSubscriptions.delete(roomId);
+      if (completedSidebarHydration) subscriptionsChanged = true;
+
+      if (
+        data.initial === true &&
+        !completedSidebarHydration &&
+        !this.activeRoomSubscriptions.has(roomId)
+      ) {
+        this.sidebarRoomSubscriptions.add(roomId);
+        subscriptionsChanged = true;
+      }
+
+      if (subscriptionsChanged) this.queueRoomSubscriptionSync();
+    };
+    this.onCacheAccountData = (event) => this.sidebarCache.cacheAccountData(event);
+
     Array.from(options.initialRoomIds ?? []).forEach((roomId) => this.subscribeToRoom(roomId));
   }
 
   public attach(): void {
     this.slidingSync.on(SlidingSyncEvent.Lifecycle, this.onLifecycle);
+    this.slidingSync.on(SlidingSyncEvent.RoomData, this.onCacheRoomData);
     this.mx.on(RoomMemberEvent.Membership, this.onMembershipLeave);
+    this.mx.on(ClientEvent.AccountData, this.onCacheAccountData);
 
     this.armPollWatchdog();
   }
@@ -491,7 +583,115 @@ export class SlidingSyncManager {
     this.pollWatchdogTimer = undefined;
     this.slidingSync.stop();
     this.slidingSync.removeListener(SlidingSyncEvent.Lifecycle, this.onLifecycle);
+    this.slidingSync.removeListener(SlidingSyncEvent.RoomData, this.onCacheRoomData);
+    if (this.cacheHydrationNewListener) {
+      this.slidingSync.removeListener(
+        EventEmitterEvents.NewListener,
+        this.cacheHydrationNewListener as never
+      );
+      this.cacheHydrationNewListener = undefined;
+    }
+    this.cacheHydrationResolve?.(false);
+    this.cacheHydrationResolve = undefined;
     this.mx.removeListener(RoomMemberEvent.Membership, this.onMembershipLeave);
+    this.mx.removeListener(ClientEvent.AccountData, this.onCacheAccountData);
+    this.sidebarCache.dispose();
+  }
+
+  private recordServerMembershipRooms(response: MSC3575SlidingSyncResponse): void {
+    const userId = this.mx.getSafeUserId();
+    Object.entries(response.rooms ?? {}).forEach(([roomId, roomData]) => {
+      const membership = membershipOf(
+        findSelfMemberEvent(
+          [...(roomData.required_state ?? []), ...(roomData.invite_state ?? [])],
+          userId
+        )
+      );
+
+      if (membership === KnownMembership.Leave || membership === KnownMembership.Ban) {
+        this.serverMembershipRoomIds.delete(roomId);
+      } else {
+        this.serverMembershipRoomIds.add(roomId);
+      }
+    });
+  }
+
+  /**
+   * Once the lists are loaded, drops cached rooms the server no longer reports
+   * us in, such as rooms left from another client while this one was closed.
+   */
+  private reconcileSidebarCacheMembership(): void {
+    if (this.sidebarCacheReconciled || this.sidebarCacheReconciliationQueued) return;
+    this.sidebarCacheReconciliationQueued = true;
+
+    this.cacheHydrationPromise
+      .then(async () => {
+        if (this.disposed || this.sidebarCacheReconciled) return;
+
+        const { joined_rooms: joinedRoomIds } = await this.mx.getJoinedRooms();
+
+        if (this.disposed || this.sidebarCacheReconciled) return;
+        this.sidebarCacheReconciled = true;
+
+        const validRoomIds = new Set([...this.serverMembershipRoomIds, ...joinedRoomIds]);
+
+        this.sidebarCache.clearInviteStateForRooms(joinedRoomIds);
+
+        joinedRoomIds.forEach((roomId) => {
+          const room = this.mx.getRoom(roomId);
+          if (room?.getMyMembership() === KnownMembership.Invite) {
+            room.updateMyMembership(KnownMembership.Join);
+          }
+        });
+
+        const removedRoomIds = this.sidebarCache.reconcileRooms(validRoomIds);
+        removedRoomIds.forEach((roomId) => {
+          this.mx.getRoom(roomId)?.updateMyMembership(KnownMembership.Leave);
+          this.unsubscribeFromRoom(roomId);
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn('Skipped sliding sync sidebar cache reconciliation', error);
+      });
+  }
+
+  /**
+   * Replays the cached room list into the SDK as soon as it starts listening for
+   * room data, so the sidebar renders before the first sliding sync response.
+   */
+  public prepareSidebarCacheHydration(): void {
+    if (this.disposed || this.cacheHydrationNewListener) return;
+
+    this.cacheHydrationPromise = new Promise<boolean>((resolve) => {
+      this.cacheHydrationResolve = resolve;
+    });
+
+    this.cacheHydrationNewListener = (eventName) => {
+      if (eventName !== SlidingSyncEvent.RoomData) return;
+      const listener = this.cacheHydrationNewListener;
+      if (listener) {
+        this.slidingSync.removeListener(EventEmitterEvents.NewListener, listener as never);
+      }
+      this.cacheHydrationNewListener = undefined;
+
+      queueMicrotask(() => {
+        this.hydratingSidebarCache = true;
+        this.sidebarCache
+          .hydrate(this.mx, this.slidingSync)
+          .then((hydrated) => this.cacheHydrationResolve?.(hydrated))
+          .catch(() => this.cacheHydrationResolve?.(false))
+          .finally(() => {
+            this.hydratingSidebarCache = false;
+            this.cacheHydrationResolve = undefined;
+          });
+      });
+    };
+
+    this.slidingSync.on(EventEmitterEvents.NewListener, this.cacheHydrationNewListener as never);
+  }
+
+  public waitForSidebarCacheHydration(): Promise<boolean> {
+    return this.cacheHydrationPromise;
   }
 
   public trackTimelineResetCompletion(
@@ -539,6 +739,7 @@ export class SlidingSyncManager {
     if (allListsComplete && !this.listsFullyLoaded) {
       this.listsFullyLoaded = true;
       this.initialListHydrationCompleted = true;
+      this.reconcileSidebarCacheMembership();
       setTimeout(() => this.flushDeferredSubscriptions(), 0);
     }
   }
@@ -559,6 +760,7 @@ export class SlidingSyncManager {
   }
 
   private handleRoomLeaveSubscriptions(roomId: string): void {
+    this.sidebarCache.removeRoom(roomId);
     const removedPassiveSubscription = this.removePassiveSubscriptions(roomId);
     if (this.activeRoomSubscriptions.has(roomId)) {
       this.unsubscribeFromRoom(roomId);
@@ -570,10 +772,11 @@ export class SlidingSyncManager {
   // Includes the deferred sets so a later flush cannot resubscribe a room we left.
   private removePassiveSubscriptions(roomId: string): boolean {
     const removedSpace = this.spaceSubscriptions.delete(roomId);
+    const removedSidebar = this.sidebarRoomSubscriptions.delete(roomId);
     const removedImagePack = this.imagePackRoomSubscriptions.delete(roomId);
     this.deferredSpaceSubscriptions.delete(roomId);
     this.deferredImagePackSubscriptions?.delete(roomId);
-    return removedSpace || removedImagePack;
+    return removedSpace || removedSidebar || removedImagePack;
   }
 
   private flushDeferredSubscriptions(): void {
@@ -604,6 +807,7 @@ export class SlidingSyncManager {
     let dropped = 0;
     [
       this.activeRoomSubscriptions,
+      this.sidebarRoomSubscriptions,
       this.spaceSubscriptions,
       this.imagePackRoomSubscriptions,
     ].forEach((group) =>
@@ -632,6 +836,10 @@ export class SlidingSyncManager {
             ? SPACE_IMAGE_PACK_SUBSCRIPTION_KEY
             : SPACE_SUBSCRIPTION_KEY
         );
+      } else if (this.sidebarRoomSubscriptions.has(roomId)) {
+        // Spaces need their child state even when their initial list data also
+        // placed them in the lightweight sidebar subscription.
+        this.slidingSync.useCustomSubscription(roomId, SIDEBAR_ROOM_SUBSCRIPTION_KEY);
       } else {
         this.slidingSync.useCustomSubscription(roomId, IMAGE_PACK_SUBSCRIPTION_KEY);
       }
