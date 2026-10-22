@@ -6,6 +6,7 @@ import { type RoomEventHandlerMap } from 'matrix-js-sdk/lib/models/room';
 import { Thread, ThreadEvent } from 'matrix-js-sdk/lib/models/thread';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts as LinkifyOpts } from 'linkifyjs';
+import { useParams } from 'react-router-dom';
 import { useRoom } from '../../hooks/useRoom';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { Page, PageContent, PageContentCenter, PageHeroSection } from '../../components/page';
@@ -133,6 +134,7 @@ export function ForumView() {
 
   const [openThreadId, setOpenThread] = useAtom(roomIdToOpenThreadAtomFamily(room.roomId));
   const [updateKey, forceUpdate] = useState(0);
+  const { eventId } = useParams();
   const [editId, setEditId] = useState<string | undefined>(undefined);
 
   // Settings
@@ -233,6 +235,30 @@ export function ForumView() {
         // Silently ignore — server may not support threads
       });
   }, [room]);
+
+  // Open the thread a deep link points at, once it has been loaded.
+  useEffect(() => {
+    if (!eventId) return;
+
+    const event = room.findEventById(eventId);
+    let threadRootId = event?.threadRootId;
+    if (!threadRootId && room.getThread(eventId)) {
+      threadRootId = eventId;
+    }
+    if (!threadRootId) {
+      const thread = room
+        .getThreads()
+        .find(
+          (candidate) =>
+            candidate.id === eventId || candidate.events.some((ev) => ev.getId() === eventId)
+        );
+      threadRootId = thread?.id;
+    }
+
+    if (threadRootId && openThreadId !== threadRootId) {
+      setOpenThread(threadRootId);
+    }
+  }, [eventId, openThreadId, room, setOpenThread, updateKey]);
 
   // Mark main room timeline as read on mount (threads are untouched)
   useEffect(() => {
@@ -335,8 +361,8 @@ export function ForumView() {
   const posts = useMemo(() => collectForumPosts(room), [room, updateKey]);
 
   const handleOpenThread = useCallback(
-    (eventId: string) => {
-      setOpenThread(eventId);
+    (postEventId: string) => {
+      setOpenThread(postEventId);
     },
     [setOpenThread]
   );
