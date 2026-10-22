@@ -78,28 +78,14 @@ export class CallWidgetDriver extends WidgetDriver {
   }
 
   public async sendDelayedEvent(
-    delay: number | null,
-    parentDelayId: string | null,
+    delay: number,
     eventType: string,
     content: IContent,
     stateKey: string | null = null,
     targetRoomId: string | null = null
   ): Promise<ISendDelayedEventDetails> {
     const roomId = targetRoomId || this.inRoomId;
-
-    let delayOpts;
-    if (delay !== null) {
-      delayOpts = {
-        delay,
-        ...(parentDelayId !== null && { parent_delay_id: parentDelayId }),
-      };
-    } else if (parentDelayId !== null) {
-      delayOpts = {
-        parent_delay_id: parentDelayId,
-      };
-    } else {
-      throw new Error('Must provide at least one of delay or parentDelayId');
-    }
+    const delayOpts = { delay };
 
     let r: SendDelayedEventResponse | null;
     if (stateKey !== null) {
