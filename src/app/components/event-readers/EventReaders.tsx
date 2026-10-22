@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import {
@@ -26,6 +26,7 @@ import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getMouseEventCords } from '../../utils/dom';
 import { nicknamesAtom } from '../../state/nicknames';
+import { hydrateRoomMembers } from '../../../client/roomMemberHydration';
 
 export type EventReadersProps = {
   room: Room;
@@ -40,6 +41,23 @@ export const EventReaders = as<'div', EventReadersProps>(
     const openProfile = useOpenUserRoomProfile();
     const space = useSpaceOptionally();
     const nicknames = useAtomValue(nicknamesAtom);
+    const [, forceUpdate] = useState(0);
+
+    // Readers are rarely in the lazily loaded member set sliding sync delivers.
+    useEffect(() => {
+      let disposed = false;
+      const unknownUserIds = latestEventReaders.filter(
+        (readerId) => readerId && !room.getMember(readerId)
+      );
+      if (unknownUserIds.length > 0) {
+        hydrateRoomMembers(mx, room.roomId, unknownUserIds).then(() => {
+          if (!disposed) forceUpdate((n) => n + 1);
+        });
+      }
+      return () => {
+        disposed = true;
+      };
+    }, [mx, room, latestEventReaders]);
 
     const getName = (userId: string) =>
       getMemberDisplayName(room, userId, nicknames) ?? getMxIdLocalPart(userId) ?? userId;

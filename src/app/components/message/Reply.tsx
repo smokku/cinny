@@ -16,6 +16,7 @@ import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { nicknamesAtom } from '../../state/nicknames';
 import { GALLERY_MSGTYPE, IGalleryContent } from '../../../types/matrix/common';
 import { getGalleryPreview } from '../../utils/gallery';
+import { useRoomMemberHydration } from '../../hooks/useRoomMemberHydration';
 
 type ReplyLayoutProps = {
   userColor?: string;
@@ -95,6 +96,7 @@ export const Reply = as<'div', ReplyProps>(
         ? getGalleryPreview(replyContent as IGalleryContent)
         : replyContent?.body;
     const sender = replyEvent?.getSender();
+    useRoomMemberHydration(room, sender ?? '');
     const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
     const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;
 

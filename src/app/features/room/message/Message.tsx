@@ -81,6 +81,7 @@ import { computeBookmarkId, createBookmarkItem } from '../../bookmarks/bookmarkD
 import { useIsBookmarked, useBookmarkActions } from '../../bookmarks/useBookmarks';
 import { nicknamesAtom, setNicknameAtom } from '../../../state/nicknames';
 import { useUserProfile } from '../../../hooks/useUserProfile';
+import { useRoomMemberHydration } from '../../../hooks/useRoomMemberHydration';
 import { useBlobCache } from '../../../hooks/useBlobCache';
 import { useEventSendStatus } from '../../../hooks/useEventSendStatus';
 
@@ -786,6 +787,7 @@ export const Message = as<'div', MessageProps>(
     const nicknames = useAtomValue(nicknamesAtom);
     const setNickname = useSetAtom(setNicknameAtom);
     const profile = useUserProfile(senderId, room);
+    useRoomMemberHydration(room, senderId, mEvent.sender !== null, profile.displayName);
     const [showPronouns] = useSetting(settingsAtom, 'showPronouns');
     const pronounSummaries = getPronounSummaries(profile.pronouns);
 
