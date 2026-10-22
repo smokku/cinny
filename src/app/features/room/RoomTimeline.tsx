@@ -43,6 +43,7 @@ import {
   Icons,
   Line,
   Scroll,
+  Spinner,
   Text,
   as,
   color,
@@ -124,6 +125,7 @@ import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { isPreprocessingSlidingSyncTimelineReset } from '../../../client/slidingSyncTimelineReset';
+import { useSlidingSyncRoomLoading } from '../../hooks/useSlidingSyncActiveRoom';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { useIsDirectRoom } from '../../hooks/useRoom';
@@ -670,6 +672,7 @@ export function RoomTimeline({
 }: RoomTimelineProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const roomSyncLoading = useSlidingSyncRoomLoading(room.roomId);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
@@ -2157,6 +2160,15 @@ export function RoomTimeline({
 
   return (
     <Box grow="Yes" style={{ position: 'relative' }}>
+      {roomSyncLoading && eventsLength === 0 && (
+        <Box
+          justifyContent="Center"
+          alignItems="Center"
+          style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}
+        >
+          <Spinner variant="Secondary" size="400" />
+        </Box>
+      )}
       {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
         <TimelineFloat position="Top">
           <Chip
