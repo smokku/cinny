@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { AccountDataEvents } from 'matrix-js-sdk';
 import { Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -26,7 +27,8 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
 
   const submitAccountData: AccountDataSubmitCallback = useCallback(
     async (type, content) => {
-      await mx.setAccountData(type, content);
+      // Developer tools edit arbitrary account data, not only the known event types.
+      await mx.setAccountData(type as keyof AccountDataEvents, content as never);
     },
     [mx]
   );
@@ -35,7 +37,11 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     return (
       <AccountDataEditor
         type={accountDataType ?? undefined}
-        content={accountDataType ? mx.getAccountData(accountDataType)?.getContent() : undefined}
+        content={
+          accountDataType
+            ? mx.getAccountData(accountDataType as keyof AccountDataEvents)?.getContent()
+            : undefined
+        }
         submitChange={submitAccountData}
         requestClose={() => setAccountDataType(undefined)}
       />
