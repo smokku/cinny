@@ -15,13 +15,22 @@ import {
 } from 'folds';
 import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient } from 'matrix-js-sdk';
 import FocusTrap from 'focus-trap-react';
-import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { matchPath, useLocation } from 'react-router-dom';
 import {
   clearCacheAndReload,
   clearLoginData,
   initClient,
   logoutClient,
   startClient,
+  stopClient,
 } from '../../../client/initMatrix';
 import { SplashScreen } from '../../components/splash-screen';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
@@ -37,6 +46,21 @@ import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getFallbackSession } from '../../state/sessions';
 import { AutoDiscovery } from './AutoDiscovery';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
+import { getCanonicalAliasRoomId, isRoomAlias, isRoomId } from '../../utils/matrix';
+import { DIRECT_ROOM_PATH, HOME_ROOM_PATH, SPACE_ROOM_PATH } from '../paths';
+
+const resolveLocalRoomId = (
+  mx: MatrixClient,
+  encodedRoomIdOrAlias: string | undefined
+): string | undefined => {
+  if (!encodedRoomIdOrAlias) return undefined;
+  const roomIdOrAlias = decodeURIComponent(encodedRoomIdOrAlias);
+  if (isRoomId(roomIdOrAlias)) return roomIdOrAlias;
+  if (isRoomAlias(roomIdOrAlias)) return getCanonicalAliasRoomId(mx, roomIdOrAlias);
+  return undefined;
+};
 
 function ClientRootLoading() {
   return (
@@ -127,7 +151,7 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
 const useLogoutListener = (mx?: MatrixClient) => {
   useEffect(() => {
     const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
-      mx?.stopClient();
+      if (mx) stopClient(mx);
       await mx?.clearStores();
       window.localStorage.clear();
       window.location.reload();
@@ -157,8 +181,27 @@ export function ClientRoot({ children }: ClientRootProps) {
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
+
+  const [slidingSync] = useSetting(settingsAtom, 'slidingSync');
+  const location = useLocation();
+  const roomMatch =
+    matchPath(HOME_ROOM_PATH, location.pathname) ??
+    matchPath(DIRECT_ROOM_PATH, location.pathname) ??
+    matchPath(SPACE_ROOM_PATH, location.pathname);
+  // Only the room open at startup matters; later navigation is handled once the client runs.
+  const initialRoomIdOrAliasRef = useRef(roomMatch?.params.roomIdOrAlias);
+
   const [startState, startMatrix] = useAsyncCallback<void, Error, [MatrixClient]>(
-    useCallback((m) => startClient(m), [])
+    useCallback(
+      (m) => {
+        const initialRoomId = resolveLocalRoomId(m, initialRoomIdOrAliasRef.current);
+        return startClient(m, {
+          slidingSync,
+          initialRoomIds: initialRoomId ? [initialRoomId] : undefined,
+        });
+      },
+      [slidingSync]
+    )
   );
 
   useSyncNicknames(mx);

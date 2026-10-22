@@ -123,6 +123,7 @@ import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { isPreprocessingSlidingSyncTimelineReset } from '../../../client/slidingSyncTimelineReset';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { useIsDirectRoom } from '../../hooks/useRoom';
@@ -609,16 +610,24 @@ function ThreadReplyChip({
   );
 }
 
-const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+const useLiveTimelineRefresh = (room: Room, onRefresh: (preservePopulated: boolean) => void) => {
   useEffect(() => {
+    const unfilteredTimelineSet = room.getUnfilteredTimelineSet();
     const handleTimelineRefresh: RoomEventHandlerMap[RoomEvent.TimelineRefresh] = (r) => {
       if (r.roomId !== room.roomId) return;
-      onRefresh();
+      onRefresh(false);
+    };
+    // A sliding sync gap resets the live timeline before its events arrive; keep
+    // showing the old events until the refresh that follows the response.
+    const handleTimelineReset: EventTimelineSetHandlerMap[RoomEvent.TimelineReset] = () => {
+      onRefresh(isPreprocessingSlidingSyncTimelineReset(unfilteredTimelineSet));
     };
 
     room.on(RoomEvent.TimelineRefresh, handleTimelineRefresh);
+    unfilteredTimelineSet.on(RoomEvent.TimelineReset, handleTimelineReset);
     return () => {
       room.removeListener(RoomEvent.TimelineRefresh, handleTimelineRefresh);
+      unfilteredTimelineSet.removeListener(RoomEvent.TimelineReset, handleTimelineReset);
     };
   }, [room, onRefresh]);
 };
@@ -931,11 +940,21 @@ export function RoomTimeline({
 
   useLiveTimelineRefresh(
     room,
-    useCallback(() => {
-      if (liveTimelineLinked) {
-        setTimeline(getInitialTimeline(room));
-      }
-    }, [room, liveTimelineLinked])
+    useCallback(
+      (preservePopulated: boolean) => {
+        if (!liveTimelineLinked) return;
+        const refreshed = getInitialTimeline(room);
+        if (
+          preservePopulated &&
+          eventsLength > 0 &&
+          getTimelinesEventsCount(refreshed.linkedTimelines) === 0
+        ) {
+          return;
+        }
+        setTimeline(refreshed);
+      },
+      [room, liveTimelineLinked, eventsLength]
+    )
   );
 
   // Stay at bottom when room editor resize
