@@ -114,6 +114,53 @@ export class CallWidgetDriver extends WidgetDriver {
     };
   }
 
+  public async sendStickyEvent(
+    stickyDurationMs: number,
+    eventType: string,
+    content: IContent,
+    targetRoomId: string | null = null
+  ): Promise<ISendEventDetails> {
+    const roomId = targetRoomId || this.inRoomId;
+
+    const r = await this.mx._unstable_sendStickyEvent(
+      roomId,
+      stickyDurationMs,
+      null,
+      eventType as keyof TimelineEvents,
+      content as TimelineEvents[keyof TimelineEvents]
+    );
+
+    return { roomId, eventId: r.event_id };
+  }
+
+  public async sendDelayedStickyEvent(
+    delay: number,
+    stickyDurationMs: number,
+    eventType: string,
+    content: IContent,
+    targetRoomId: string | null = null
+  ): Promise<ISendDelayedEventDetails> {
+    const roomId = targetRoomId || this.inRoomId;
+
+    const r = await this.mx._unstable_sendStickyDelayedEvent(
+      roomId,
+      stickyDurationMs,
+      { delay },
+      null,
+      eventType as keyof TimelineEvents,
+      content as TimelineEvents[keyof TimelineEvents]
+    );
+
+    return { roomId, delayId: r.delay_id };
+  }
+
+  public async readStickyEvents(roomId: string): Promise<IRoomEvent[]> {
+    const room = this.mx.getRoom(roomId);
+    if (room === null) return [];
+
+    return [...room._unstable_getStickyEvents()].map((e) => e.getEffectiveEvent() as IRoomEvent);
+  }
+
   public async cancelScheduledDelayedEvent(delayId: string): Promise<void> {
     await this.mx._unstable_cancelScheduledDelayedEvent(delayId);
   }
