@@ -2,6 +2,7 @@ import { MatrixClient, SyncState } from 'matrix-js-sdk';
 import React, { useCallback, useState } from 'react';
 import { Box, config, Line, Text } from 'folds';
 import { useSyncState } from '../../hooks/useSyncState';
+import { useSlidingSyncHydrating } from '../../hooks/useSlidingSyncHydrating';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 
 type StateData = {
@@ -17,6 +18,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     current: null,
     previous: undefined,
   });
+  const { isHydrating, progress } = useSlidingSyncHydrating(mx);
 
   useSyncState(
     mx,
@@ -45,6 +47,33 @@ export function SyncStatus({ mx }: SyncStatusProps) {
           justifyContent="Center"
         >
           <Text size="L400">Connecting...</Text>
+        </Box>
+        <Line variant="Success" size="300" />
+      </Box>
+    );
+  }
+
+  if (
+    isHydrating &&
+    (stateData.current === SyncState.Syncing ||
+      stateData.current === SyncState.Prepared ||
+      stateData.current === SyncState.Catchup)
+  ) {
+    const percentage =
+      progress && progress.totalRooms > 0
+        ? Math.min(100, Math.floor((progress.loadedRooms / progress.totalRooms) * 100))
+        : undefined;
+    return (
+      <Box direction="Column" shrink="No">
+        <Box
+          className={ContainerColor({ variant: 'Success' })}
+          style={{ padding: `${config.space.S100} 0` }}
+          alignItems="Center"
+          justifyContent="Center"
+        >
+          <Text size="L400">
+            {percentage === undefined ? 'Loading rooms...' : `Loading rooms... ${percentage}%`}
+          </Text>
         </Box>
         <Line variant="Success" size="300" />
       </Box>
