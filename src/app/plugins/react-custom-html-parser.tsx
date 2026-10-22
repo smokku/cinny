@@ -437,6 +437,28 @@ export const getReactCustomHtmlParser = (
           );
         }
 
+        if (name === 'dl') {
+          return (
+            <dl {...props} className={css.DescriptionList}>
+              {domToReact(children, opts)}
+            </dl>
+          );
+        }
+        if (name === 'dt') {
+          return (
+            <dt {...props} className={css.DescriptionTerm}>
+              {domToReact(children, opts)}
+            </dt>
+          );
+        }
+        if (name === 'dd') {
+          return (
+            <dd {...props} className={css.DescriptionDetails}>
+              {domToReact(children, opts)}
+            </dd>
+          );
+        }
+
         if (name === 'code') {
           if (parent && 'name' in parent && parent.name === 'pre') {
             const codeReact = domToReact(children, opts);
