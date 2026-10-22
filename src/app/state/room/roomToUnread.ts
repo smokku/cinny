@@ -27,6 +27,7 @@ import {
   getNotificationType,
   getUnreadInfo,
   getUnreadInfos,
+  getUnreadInfosForRooms,
   isNotificationEvent,
   roomHaveUnread,
 } from '../../utils/room';
@@ -395,7 +396,10 @@ const getSavedThreadUnread = async (
   mx: MatrixClient,
   getNextOrder: () => number
 ): Promise<RoomToThreadUnread> => {
-  const savedSync = (await mx.store.getSavedSync()) as SavedSync | null;
+  // The saved sync is a stale classic sync snapshot when sliding sync is in use.
+  const savedSync = getSlidingSyncManager(mx)
+    ? null
+    : ((await mx.store.getSavedSync()) as SavedSync | null);
   const joinRooms = savedSync?.roomsData?.join ?? {};
   const roomToThreadUnread: RoomToThreadUnread = new Map();
 
@@ -568,7 +572,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   const resetRoomUnread = useCallback(() => {
     setUnreadAtom({
       type: 'RESET',
-      unreadInfos: getUnreadInfos(mx),
+      unreadInfos: getUnreadInfos(mx, { applyFixup: !!getSlidingSyncManager(mx) }),
     });
   }, [mx, setUnreadAtom]);
 
@@ -665,6 +669,20 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     };
   }, [mx, resetRoomUnread]);
 
+  // Sliding sync does not mark events live when the server omits num_live, so
+  // recompute the rooms each processed response touched instead of relying on
+  // live timeline events alone.
+  useEffect(() => {
+    const manager = getSlidingSyncManager(mx);
+    if (!manager) return undefined;
+    return manager.subscribeToResponseSettled((dirtyRoomIds) => {
+      if (dirtyRoomIds.size === 0) return;
+      const { unread, deleted } = getUnreadInfosForRooms(mx, dirtyRoomIds, { applyFixup: true });
+      deleted.forEach((roomId) => setUnreadAtom({ type: 'DELETE', roomId }));
+      unread.forEach((unreadInfo) => setUnreadAtom({ type: 'PUT', unreadInfo }));
+    });
+  }, [mx, setUnreadAtom]);
+
   useSyncState(
     mx,
     useCallback(
@@ -703,7 +721,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
 
       if (mEvent.getSender() === mx.getUserId()) return;
 
-      const unreadInfo = getUnreadInfo(room);
+      const unreadInfo = getUnreadInfo(room, { applyFixup: !!getSlidingSyncManager(mx) });
       if (
         notificationType === NotificationType.MentionsAndKeywords &&
         unreadInfo.total === 0 &&
@@ -737,7 +755,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
 
       if (mEvent.getSender() === mx.getUserId()) return;
 
-      const unreadInfo = getUnreadInfo(room);
+      const unreadInfo = getUnreadInfo(room, { applyFixup: !!getSlidingSyncManager(mx) });
       if (
         notificationType === NotificationType.MentionsAndKeywords &&
         unreadInfo.total === 0 &&
@@ -850,7 +868,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         if (notificationType === NotificationType.Mute) {
           setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
         } else {
-          const unreadInfo = getUnreadInfo(room);
+          const unreadInfo = getUnreadInfo(room, { applyFixup: !!getSlidingSyncManager(mx) });
           if (unreadInfo.total === 0 && unreadInfo.highlight === 0) {
             setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
           } else {

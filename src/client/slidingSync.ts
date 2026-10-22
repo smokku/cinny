@@ -62,6 +62,10 @@ type OptimisticJoin = {
 
 export type HydrationProgress = { loadedRooms: number; totalRooms: number };
 
+type RoomScopedExtensionResponse = {
+  rooms?: Record<string, unknown>;
+};
+
 type SlidingSyncOptions = {
   timelineLimit?: number;
   pollTimeoutMs?: number;
@@ -487,6 +491,17 @@ export class SlidingSyncManager {
   private syncCount = 0;
 
   /**
+   * Room IDs that received data in the current sync cycle. Used to narrow the
+   * sync-settled unread recompute to only changed rooms instead of all rooms.
+   * Populated by onCacheRoomData, cleared after the settled listeners fire.
+   */
+  private readonly dirtyRoomIds = new Set<string>();
+
+  private readonly responseSettledListeners = new Set<
+    (dirtyRoomIds: ReadonlySet<string>) => void
+  >();
+
+  /**
    * One-shot RoomData listeners keyed by roomId, waiting for the first data of a
    * room subscription. Cleaned up after the first fire or on unsubscribe/dispose.
    */
@@ -619,6 +634,25 @@ export class SlidingSyncManager {
 
       this.expandListsByPage();
       this.ensureListCoverage();
+
+      ['receipts', 'account_data'].forEach((extensionName) => {
+        const extension = resp.extensions?.[extensionName] as
+          | RoomScopedExtensionResponse
+          | undefined;
+        const rooms = extension?.rooms ?? {};
+        Object.entries(rooms).forEach(([roomId, data]) => {
+          if (extensionName === 'account_data' && Array.isArray(data) && data.length === 0) return;
+          this.dirtyRoomIds.add(roomId);
+        });
+      });
+
+      // Listeners run once the SDK has applied the whole response.
+      queueMicrotask(() => {
+        if (this.disposed) return;
+        const dirtyRoomIds = new Set(this.dirtyRoomIds);
+        this.dirtyRoomIds.clear();
+        this.responseSettledListeners.forEach((listener) => listener(dirtyRoomIds));
+      });
     };
 
     this.onMembershipLeave = (_event, member) => {
@@ -629,6 +663,7 @@ export class SlidingSyncManager {
     };
 
     this.onCacheRoomData = (roomId, data) => {
+      this.dirtyRoomIds.add(roomId);
       this.sidebarCache.cacheRoom(roomId, data);
 
       if (!this.initialListHydrationCompleted || this.hydratingSidebarCache) return;
@@ -695,6 +730,8 @@ export class SlidingSyncManager {
     );
     this.roomSubscriptionStatusListeners.clear();
     this.optimisticallyJoinedRoomIds.clear();
+    this.dirtyRoomIds.clear();
+    this.responseSettledListeners.clear();
     this.hydrationStatusListeners.forEach((listener) => listener(false));
     this.hydrationStatusListeners.clear();
 
@@ -812,6 +849,17 @@ export class SlidingSyncManager {
 
   public waitForSidebarCacheHydration(): Promise<boolean> {
     return this.cacheHydrationPromise;
+  }
+
+  /**
+   * Calls the listener after every processed sliding sync response with the rooms
+   * it touched, including receipt and account data changes.
+   */
+  public subscribeToResponseSettled(
+    listener: (dirtyRoomIds: ReadonlySet<string>) => void
+  ): () => void {
+    this.responseSettledListeners.add(listener);
+    return () => this.responseSettledListeners.delete(listener);
   }
 
   public trackTimelineResetCompletion(
