@@ -1207,7 +1207,7 @@ export function RoomTimeline({
   };
 
   const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+    markAsRead(mx, room.roomId, hideActivity, true);
   };
 
   const handleOpenReply: MouseEventHandler = useCallback(
