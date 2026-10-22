@@ -421,6 +421,81 @@ export const prepareSlidingSyncTimelines = (
   };
 };
 
+const LOCAL_ECHO_MATCH_MAX_CLOCK_SKEW_MS = 60_000;
+
+const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map(
+        (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`
+      );
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+/**
+ * Merges pending local echoes with the remote copy of the event when the server
+ * returned it without our transaction id, which leaves the SDK unable to link
+ * them and the message shown twice. Matches by transaction id first, then by
+ * sender, type and content.
+ */
+export const reconcileLocalEchoes = (room: Room | null | undefined): void => {
+  if (!room) return;
+  const liveEvents = room.getLiveTimeline().getEvents();
+  const pendingEchoes = liveEvents.filter(
+    (event) =>
+      event.status !== null &&
+      event.status !== EventStatus.CANCELLED &&
+      event.status !== EventStatus.SENT
+  );
+  if (pendingEchoes.length === 0) return;
+
+  const claimedEventIds = new Set<string>();
+  const isMergeCandidate = (candidate: MatrixEvent, echo: MatrixEvent): boolean => {
+    const candidateId = candidate.getId();
+    if (!candidateId || candidate === echo || claimedEventIds.has(candidateId)) return false;
+    if (candidate.status !== null) return false;
+    if (candidate.getSender() !== echo.getSender()) return false;
+    return !candidate.isRedacted();
+  };
+
+  pendingEchoes.forEach((echo) => {
+    const txnId = echo.getTxnId();
+    let match = txnId
+      ? liveEvents.find(
+          (candidate) =>
+            isMergeCandidate(candidate, echo) && candidate.getUnsigned()?.transaction_id === txnId
+        )
+      : undefined;
+    if (!match) {
+      const wireType = echo.getWireType();
+      const wireContent = canonicalJson(echo.getWireContent());
+      match = liveEvents.find((candidate) => {
+        if (!isMergeCandidate(candidate, echo)) return false;
+        if (candidate.getWireType() !== wireType) return false;
+        const candidateTxn = candidate.getUnsigned()?.transaction_id;
+        if (typeof candidateTxn === 'string' && candidateTxn !== txnId) return false;
+        if (candidate.getTs() < echo.getTs() - LOCAL_ECHO_MATCH_MAX_CLOCK_SKEW_MS) return false;
+        return canonicalJson(candidate.getWireContent()) === wireContent;
+      });
+    }
+    const matchId = match?.getId();
+    if (!match || !matchId) return;
+    claimedEventIds.add(matchId);
+
+    const unsigned = match.getUnsigned();
+    if (txnId && typeof unsigned.transaction_id !== 'string') {
+      unsigned.transaction_id = txnId;
+      match.setUnsigned(unsigned);
+    }
+    room.removeEvent(matchId);
+    room.handleRemoteEcho(match, echo);
+  });
+};
+
 export class SlidingSyncManager {
   private disposed = false;
 
@@ -606,6 +681,9 @@ export class SlidingSyncManager {
 
       this.timelineResetCompletions.get(resp)?.();
       this.timelineResetCompletions.delete(resp);
+      Object.keys(resp.rooms ?? {}).forEach((roomId) =>
+        reconcileLocalEchoes(this.mx.getRoom(roomId))
+      );
       this.recordServerMembershipRooms(resp);
       this.reassertOptimisticJoins();
 
