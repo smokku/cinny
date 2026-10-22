@@ -41,6 +41,8 @@ const POLL_DEADLINE_MARGIN_MS = 20_000;
 
 const ACTIVE_ROOM_SUBSCRIPTION_KEY = 'active_room';
 const SPACE_SUBSCRIPTION_KEY = 'space';
+const IMAGE_PACK_SUBSCRIPTION_KEY = 'image_packs';
+const SPACE_IMAGE_PACK_SUBSCRIPTION_KEY = 'space_image_packs';
 const ACTIVE_ROOM_TIMELINE_LIMIT = 50;
 
 type SlidingSyncOptions = {
@@ -101,6 +103,22 @@ const buildActiveRoomSubscription = (timelineLimit: number): MSC3575RoomSubscrip
 const buildSpaceSubscription = (): MSC3575RoomSubscription => ({
   timeline_limit: 0,
   required_state: SPACE_REQUIRED_STATE,
+});
+
+const IMAGE_PACK_REQUIRED_STATE: MSC3575RoomSubscription['required_state'] = [
+  [StateEvent.PoniesRoomEmotes, MSC3575_WILDCARD],
+];
+
+const buildImagePackSubscription = (): MSC3575RoomSubscription => ({
+  timeline_limit: 0,
+  required_state: IMAGE_PACK_REQUIRED_STATE,
+});
+
+// Pack rooms that are also spaces need both state sets; room subscriptions
+// use exactly one named key, so register the union as its own subscription.
+const buildSpaceImagePackSubscription = (): MSC3575RoomSubscription => ({
+  timeline_limit: 0,
+  required_state: [...SPACE_REQUIRED_STATE, ...IMAGE_PACK_REQUIRED_STATE],
 });
 
 const buildLists = (): Map<string, MSC3575List> => {
@@ -329,6 +347,10 @@ export class SlidingSyncManager {
 
   private deferredSpaceSubscriptions = new Set<string>();
 
+  private readonly imagePackRoomSubscriptions = new Set<string>();
+
+  private deferredImagePackSubscriptions: Set<string> | null = null;
+
   private roomSubscriptionSyncQueued = false;
 
   private readonly roomTimelineLimit: number;
@@ -393,7 +415,15 @@ export class SlidingSyncManager {
       ACTIVE_ROOM_SUBSCRIPTION_KEY,
       buildActiveRoomSubscription(roomTimelineLimit)
     );
+    this.slidingSync.addCustomSubscription(
+      IMAGE_PACK_SUBSCRIPTION_KEY,
+      buildImagePackSubscription()
+    );
     this.slidingSync.addCustomSubscription(SPACE_SUBSCRIPTION_KEY, buildSpaceSubscription());
+    this.slidingSync.addCustomSubscription(
+      SPACE_IMAGE_PACK_SUBSCRIPTION_KEY,
+      buildSpaceImagePackSubscription()
+    );
 
     this.onLifecycle = (state, resp, err) => {
       if (err) {
@@ -540,8 +570,10 @@ export class SlidingSyncManager {
   // Includes the deferred sets so a later flush cannot resubscribe a room we left.
   private removePassiveSubscriptions(roomId: string): boolean {
     const removedSpace = this.spaceSubscriptions.delete(roomId);
+    const removedImagePack = this.imagePackRoomSubscriptions.delete(roomId);
     this.deferredSpaceSubscriptions.delete(roomId);
-    return removedSpace;
+    this.deferredImagePackSubscriptions?.delete(roomId);
+    return removedSpace || removedImagePack;
   }
 
   private flushDeferredSubscriptions(): void {
@@ -550,6 +582,10 @@ export class SlidingSyncManager {
     const spaces = this.deferredSpaceSubscriptions;
     this.deferredSpaceSubscriptions = new Set();
     this.setSpaceSubscriptions(spaces);
+
+    const imagePacks = this.deferredImagePackSubscriptions;
+    this.deferredImagePackSubscriptions = null;
+    if (imagePacks) this.setImagePackSubscriptions(imagePacks);
   }
 
   private queueRoomSubscriptionSync(): void {
@@ -566,7 +602,11 @@ export class SlidingSyncManager {
     // M_INVALID_PARAM, so fill by priority and drop the rest.
     const desiredSubscriptions = new Set<string>();
     let dropped = 0;
-    [this.activeRoomSubscriptions, this.spaceSubscriptions].forEach((group) =>
+    [
+      this.activeRoomSubscriptions,
+      this.spaceSubscriptions,
+      this.imagePackRoomSubscriptions,
+    ].forEach((group) =>
       group.forEach((roomId) => {
         if (desiredSubscriptions.has(roomId)) return;
         if (desiredSubscriptions.size >= MAX_ROOM_SUBSCRIPTIONS) {
@@ -585,8 +625,15 @@ export class SlidingSyncManager {
     desiredSubscriptions.forEach((roomId) => {
       if (this.activeRoomSubscriptions.has(roomId)) {
         this.slidingSync.useCustomSubscription(roomId, ACTIVE_ROOM_SUBSCRIPTION_KEY);
+      } else if (this.spaceSubscriptions.has(roomId)) {
+        this.slidingSync.useCustomSubscription(
+          roomId,
+          this.imagePackRoomSubscriptions.has(roomId)
+            ? SPACE_IMAGE_PACK_SUBSCRIPTION_KEY
+            : SPACE_SUBSCRIPTION_KEY
+        );
       } else {
-        this.slidingSync.useCustomSubscription(roomId, SPACE_SUBSCRIPTION_KEY);
+        this.slidingSync.useCustomSubscription(roomId, IMAGE_PACK_SUBSCRIPTION_KEY);
       }
     });
 
@@ -647,6 +694,37 @@ export class SlidingSyncManager {
   public unsubscribeFromRoom(roomId: string): void {
     if (this.disposed || !this.removeActiveRoomSubscription(roomId)) return;
     this.syncRoomSubscriptions();
+  }
+
+  /**
+   * Keeps the rooms hosting the user's global emoji and sticker packs subscribed
+   * with their pack state, which the room lists do not carry.
+   */
+  public setImagePackSubscriptions(roomIds: Iterable<string>): void {
+    if (this.disposed) return;
+    const next = new Set(roomIds);
+    if (!this.listsFullyLoaded) {
+      this.deferredImagePackSubscriptions = next;
+      return;
+    }
+    const unchanged =
+      next.size === this.imagePackRoomSubscriptions.size &&
+      [...next].every((roomId) => this.imagePackRoomSubscriptions.has(roomId));
+    if (unchanged) return;
+
+    this.imagePackRoomSubscriptions.clear();
+    next.forEach((roomId) => this.imagePackRoomSubscriptions.add(roomId));
+    this.syncRoomSubscriptions();
+  }
+
+  /** Listen for raw sliding sync data for one room. */
+  public onRoomData(roomId: string, listener: () => void): () => void {
+    const handler = (dataRoomId: string) => {
+      // Let matrix-js-sdk finish applying the room data before reading state events.
+      if (dataRoomId === roomId) setTimeout(listener, 0);
+    };
+    this.slidingSync.on(SlidingSyncEvent.RoomData, handler);
+    return () => this.slidingSync.removeListener(SlidingSyncEvent.RoomData, handler);
   }
 
   /**

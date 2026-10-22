@@ -1,8 +1,9 @@
 import { Room } from 'matrix-js-sdk';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { StateEvent } from '../../types/matrix/room';
 import {
+  getGlobalImagePackRoomIds,
   getGlobalImagePacks,
   getRoomImagePack,
   getRoomImagePacks,
@@ -13,6 +14,7 @@ import {
 import { useMatrixClient } from './useMatrixClient';
 import { useAccountDataCallback } from './useAccountDataCallback';
 import { useStateEventCallback } from './useStateEventCallback';
+import { getSlidingSyncManager } from '../../client/initMatrix';
 
 export const useUserImagePack = (): ImagePack | undefined => {
   const mx = useMatrixClient();
@@ -36,12 +38,25 @@ export const useUserImagePack = (): ImagePack | undefined => {
 export const useGlobalImagePacks = (): ImagePack[] => {
   const mx = useMatrixClient();
   const [globalPacks, setGlobalPacks] = useState(() => getGlobalImagePacks(mx));
+  const [packRoomIds, setPackRoomIds] = useState(() => getGlobalImagePackRoomIds(mx));
+
+  // With sliding sync a pack room can arrive before the SDK stores it, so its
+  // state events never reach the client-level listener below.
+  useEffect(() => {
+    const manager = getSlidingSyncManager(mx);
+    if (!manager) return undefined;
+
+    const refresh = () => setGlobalPacks(getGlobalImagePacks(mx));
+    const listeners = packRoomIds.map((roomId) => manager.onRoomData(roomId, refresh));
+    return () => listeners.forEach((unsubscribe) => unsubscribe());
+  }, [mx, packRoomIds]);
 
   useAccountDataCallback(
     mx,
     useCallback(
       (mEvent) => {
         if (mEvent.getType() === AccountDataEvent.PoniesEmoteRooms) {
+          setPackRoomIds(getGlobalImagePackRoomIds(mx));
           setGlobalPacks(getGlobalImagePacks(mx));
         }
       },
@@ -55,18 +70,11 @@ export const useGlobalImagePacks = (): ImagePack[] => {
       (mEvent) => {
         const eventType = mEvent.getType();
         const roomId = mEvent.getRoomId();
-        const stateKey = mEvent.getStateKey();
-        if (eventType === StateEvent.PoniesRoomEmotes && roomId && typeof stateKey === 'string') {
-          const global = !!globalPacks.find(
-            (pack) =>
-              pack.address && pack.address.roomId === roomId && pack.address.stateKey === stateKey
-          );
-          if (global) {
-            setGlobalPacks(getGlobalImagePacks(mx));
-          }
+        if (eventType === StateEvent.PoniesRoomEmotes && roomId && packRoomIds.includes(roomId)) {
+          setGlobalPacks(getGlobalImagePacks(mx));
         }
       },
-      [mx, globalPacks]
+      [mx, packRoomIds]
     )
   );
 

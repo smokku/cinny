@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import { useMatrixClient } from './useMatrixClient';
 import { getSlidingSyncManager } from '../../client/initMatrix';
 import { useResolvedRoomIdOrAlias } from './router/useResolvedRoomId';
 import { useSpaces } from '../state/hooks/roomList';
 import { allRoomsAtom } from '../state/room-list/roomList';
+import { useAccountDataCallback } from './useAccountDataCallback';
+import { getGlobalImagePackRoomIds } from '../plugins/custom-emoji';
+import { AccountDataEvent } from '../../types/matrix/accountData';
 import {
   DIRECT_ROOM_FORUM_PATH,
   DIRECT_ROOM_PATH,
@@ -90,7 +93,31 @@ const useSlidingSyncSpaceSubscriptions = (): void => {
   }, [manager, spaces]);
 };
 
+// Subscribe pack rooms before the emoji board first opens so their
+// pack state is already available.
+const useSlidingSyncImagePackSubscriptions = (): void => {
+  const mx = useMatrixClient();
+  const manager = getSlidingSyncManager(mx);
+
+  useEffect(() => {
+    manager?.setImagePackSubscriptions(getGlobalImagePackRoomIds(mx));
+  }, [manager, mx]);
+
+  useAccountDataCallback(
+    mx,
+    useCallback(
+      (mEvent) => {
+        if (mEvent.getType() === AccountDataEvent.PoniesEmoteRooms) {
+          manager?.setImagePackSubscriptions(getGlobalImagePackRoomIds(mx));
+        }
+      },
+      [manager, mx]
+    )
+  );
+};
+
 export const useSlidingSyncActiveRoom = (): void => {
   useSlidingSyncRouteRooms();
   useSlidingSyncSpaceSubscriptions();
+  useSlidingSyncImagePackSubscriptions();
 };
