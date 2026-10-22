@@ -10,6 +10,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
+import { RoomType } from '../../../types/matrix/room';
 
 type JoinBeforeNavigateProps = { roomIdOrAlias: string; eventId?: string; viaServers?: string[] };
 export function JoinBeforeNavigate({
@@ -22,8 +23,9 @@ export function JoinBeforeNavigate({
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
 
-  const handleView = (roomId: string) => {
-    if (mx.getRoom(roomId)?.isSpaceRoom()) {
+  // A just joined room may not have its create event yet, so trust the summary's type too.
+  const handleView = (roomId: string, roomType?: string) => {
+    if (mx.getRoom(roomId)?.isSpaceRoom() || roomType === RoomType.Space) {
       navigateSpace(roomId);
       return;
     }
@@ -70,7 +72,7 @@ export function JoinBeforeNavigate({
                   renderTopicViewer={(name, topic, requestClose) => (
                     <RoomTopicViewer name={name} topic={topic} requestClose={requestClose} />
                   )}
-                  onView={handleView}
+                  onView={(roomId) => handleView(roomId, summary?.room_type)}
                 />
               )}
             </RoomSummaryLoader>

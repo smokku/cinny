@@ -1,4 +1,10 @@
-import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
+import {
+  createClient,
+  MatrixClient,
+  IndexedDBStore,
+  IndexedDBCryptoStore,
+  KnownMembership,
+} from 'matrix-js-sdk';
 import {
   MSC3575SlidingSyncRequest,
   MSC3575SlidingSyncResponse,
@@ -55,6 +61,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
 
 const slidingSyncByClient = new WeakMap<MatrixClient, SlidingSyncManager>();
 const slidingSyncRequestCleanupByClient = new WeakMap<MatrixClient, () => void>();
+const membershipActionCleanupByClient = new WeakMap<MatrixClient, () => void>();
 
 type SlidingSyncMethod = (
   reqBody: MSC3575SlidingSyncRequest,
@@ -102,6 +109,7 @@ const installSlidingSyncRequestPatch = (mx: MatrixClient, manager: SlidingSyncMa
       if (completeTimelineReset) {
         manager.trackTimelineResetCompletion(response, completeTimelineReset);
       }
+      manager.sanitizeOptimisticJoinResponse(response);
     } catch (error) {
       console.error('Failed to prepare sliding sync response', error);
     }
@@ -139,8 +147,45 @@ const supportsSlidingSync = async (mx: MatrixClient): Promise<boolean> => {
   }
 };
 
+type MatrixClientWithWritableMembershipActions = MatrixClient & {
+  joinRoom: MatrixClient['joinRoom'];
+  leave: MatrixClient['leave'];
+};
+
+// Sliding sync can lag behind, or contradict, a join or leave the user just made,
+// so apply it locally as soon as the request succeeds.
+const installMembershipActionReconciliation = (
+  mx: MatrixClient,
+  manager: SlidingSyncManager
+): void => {
+  membershipActionCleanupByClient.get(mx)?.();
+
+  const writableMx = mx as MatrixClientWithWritableMembershipActions;
+  // Keep the exact methods so cleanup restores the client without leaving bound replacements behind.
+  const originalJoinRoom = mx.joinRoom;
+  const originalLeave = mx.leave;
+
+  writableMx.joinRoom = async (...args) => {
+    const room = await originalJoinRoom.apply(mx, args);
+    manager.reconcileRoomMembership(room.roomId, KnownMembership.Join);
+    return room;
+  };
+  writableMx.leave = async (...args) => {
+    const result = await originalLeave.apply(mx, args);
+    manager.reconcileRoomMembership(args[0], KnownMembership.Leave);
+    return result;
+  };
+
+  membershipActionCleanupByClient.set(mx, () => {
+    membershipActionCleanupByClient.delete(mx);
+    writableMx.joinRoom = originalJoinRoom;
+    writableMx.leave = originalLeave;
+  });
+};
+
 const disposeSlidingSync = (mx: MatrixClient): void => {
   slidingSyncRequestCleanupByClient.get(mx)?.();
+  membershipActionCleanupByClient.get(mx)?.();
   const manager = slidingSyncByClient.get(mx);
   if (!manager) return;
   manager.dispose();
@@ -172,6 +217,7 @@ export const startClient = async (mx: MatrixClient, config?: StartClientConfig) 
     installSlidingSyncRequestPatch(mx, manager);
     manager.attach();
     manager.prepareSidebarCacheHydration();
+    installMembershipActionReconciliation(mx, manager);
     slidingSyncByClient.set(mx, manager);
   }
 
