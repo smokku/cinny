@@ -9,6 +9,15 @@
   "start_url": "./",
   "background_color": "#fff",
   "theme_color": "#fff",
+  "protocol_handlers": [
+    {
+      "protocol": "matrix",
+      "url": "./matrix-link/?uri=%s"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
   "icons": [
     {
       "src": "./public/android/android-chrome-36x36.png",

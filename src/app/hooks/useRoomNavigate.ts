@@ -29,9 +29,9 @@ export const useRoomNavigate = () => {
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
 
   const navigateSpace = useCallback(
-    (roomId: string) => {
+    (roomId: string, opts?: NavigateOptions) => {
       const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
-      navigate(getSpacePath(roomIdOrAlias));
+      navigate(getSpacePath(roomIdOrAlias), opts);
     },
     [mx, navigate]
   );

@@ -100,3 +100,9 @@ export const INBOX_INVITES_PATH = `/inbox/${_INVITES_PATH}`;
 export const SPACE_SETTINGS_PATH = '/space-settings/';
 
 export const ROOM_SETTINGS_PATH = '/room-settings/';
+
+export type MatrixLinkSearchParams = {
+  /* full matrix: URI as passed by the protocol handler */
+  uri?: string;
+};
+export const MATRIX_LINK_PATH = '/matrix-link/';

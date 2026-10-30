@@ -27,6 +27,7 @@ import {
   HOME_ROOM_FORUM_PATH,
   DIRECT_ROOM_FORUM_PATH,
   SPACE_ROOM_FORUM_PATH,
+  MATRIX_LINK_PATH,
 } from './paths';
 import { trimLeadingSlash, trimTrailingSlash } from '../utils/common';
 import { HashRouterConfig } from '../hooks/useClientConfig';
@@ -195,3 +196,5 @@ export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
 export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
 
 export const getHomeBookmarksPath = (): string => HOME_BOOKMARKS_PATH;
+
+export const getMatrixLinkPath = (): string => MATRIX_LINK_PATH;

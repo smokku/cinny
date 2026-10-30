@@ -34,6 +34,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { nicknamesAtom } from '../../state/nicknames';
 import { useSlidingSyncActiveRoom } from '../../hooks/useSlidingSyncActiveRoom';
 import { getSlidingSyncManager } from '../../../client/initMatrix';
+import { MatrixLinkLaunchConsumer } from './MatrixLink';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -307,6 +308,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <InviteNotifications />
       <MessageNotifications />
       <SlidingSyncActiveRoomSubscriber />
+      <MatrixLinkLaunchConsumer />
       {children}
     </>
   );

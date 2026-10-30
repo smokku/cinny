@@ -1,4 +1,4 @@
-import { _RoomSearchParams, DirectCreateSearchParams } from './paths';
+import { _RoomSearchParams, DirectCreateSearchParams, MatrixLinkSearchParams } from './paths';
 
 type SearchParamsGetter<T> = (searchParams: URLSearchParams) => T;
 
@@ -10,4 +10,10 @@ export const getDirectCreateSearchParams: SearchParamsGetter<DirectCreateSearchP
   searchParams
 ) => ({
   userId: searchParams.get('userId') ?? undefined,
+});
+
+export const getMatrixLinkSearchParams: SearchParamsGetter<MatrixLinkSearchParams> = (
+  searchParams
+) => ({
+  uri: searchParams.get('uri') ?? undefined,
 });

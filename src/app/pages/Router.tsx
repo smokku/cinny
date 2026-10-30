@@ -31,6 +31,7 @@ import {
   _SERVER_PATH,
   _ROOM_FORUM_PATH,
   CREATE_PATH,
+  MATRIX_LINK_PATH,
 } from './paths';
 import {
   getAppPathFromHref,
@@ -73,6 +74,7 @@ import { SearchModalRenderer } from '../features/search';
 import { getFallbackSession } from '../state/sessions';
 import { CallStatusRenderer } from './CallStatusRenderer';
 import { CallEmbedProvider } from '../components/CallEmbedProvider';
+import { MatrixLink } from './client/MatrixLink';
 
 export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
   const { hashRouter } = clientConfig;
@@ -299,6 +301,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           <Route path={_SERVER_PATH} element={<PublicRooms />} />
         </Route>
         <Route path={CREATE_PATH} element={<Create />} />
+        <Route path={MATRIX_LINK_PATH} element={<MatrixLink />} />
         <Route
           path={INBOX_PATH}
           element={
